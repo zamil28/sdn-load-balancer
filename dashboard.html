@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDN Network Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #e7ebef;
+  --panel: #f9fbfc;
+  --ink: #18212b;
+  --ink-2: #485564;
+  --muted: #6e7b89;
+  --line: #d2d9e0;
+  --grid: #e1e7ec;
+  --region: rgba(24, 33, 43, .035);
+  --region-line: #c6cfd8;
+  --device: #2b3139;
+  --face: #353c45;
+  --face-2: #434b56;
+  --socket: #14181d;
+  --label: #e9eef3;
+  --label-2: #9aa6b3;
+  --cable: #8797a9;
+  --flow: #2a78d6;
+  --flow-soft: rgba(42, 120, 214, .13);
+  --led-ok: #36c96b;
+  --led-act: #f2b33d;
+  --led-off: #1d2228;
+  --screen: #9ec6ee;
+  --good: #0ca30c; --good-text: #0a7a0a;
+  --warn: #e08a00; --warn-text: #a86500; --warn-soft: rgba(224, 138, 0, .12);
+  --bad: #d03b3b; --bad-text: #b42d2d; --bad-soft: rgba(208, 59, 59, .10);
+  --font: "IBM Plex Sans", "Noto Sans", "DejaVu Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "DejaVu Sans Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e151d; --panel: #141e29; --ink: #e2e9f0; --ink-2: #a9b6c4; --muted: #8191a2;
+    --line: #233243; --grid: #1b2836; --region: rgba(255, 255, 255, .025); --region-line: #2a3b4d;
+    --device: #39424d; --face: #46505c; --face-2: #56616e; --socket: #12161b;
+    --cable: #5d7086; --flow: #3e8ce6; --flow-soft: rgba(62, 140, 230, .18); --screen: #5f8fc4;
+    --good-text: #4cc94c; --warn-text: #f0a83c; --warn-soft: rgba(224, 138, 0, .18);
+    --bad-text: #f08080; --bad-soft: rgba(208, 59, 59, .18);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e151d; --panel: #141e29; --ink: #e2e9f0; --ink-2: #a9b6c4; --muted: #8191a2;
+  --line: #233243; --grid: #1b2836; --region: rgba(255, 255, 255, .025); --region-line: #2a3b4d;
+  --device: #39424d; --face: #46505c; --face-2: #56616e; --socket: #12161b;
+  --cable: #5d7086; --flow: #3e8ce6; --flow-soft: rgba(62, 140, 230, .18); --screen: #5f8fc4;
+  --good-text: #4cc94c; --warn-text: #f0a83c; --warn-soft: rgba(224, 138, 0, .18);
+  --bad-text: #f08080; --bad-soft: rgba(208, 59, 59, .18);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1480px; margin: 0 auto; padding: 24px 24px 56px; }
+.mono { font-family: var(--mono); font-size: .92em; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; color: var(--muted); }
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.01em; }
+h2 { font-size: 18px; }
+h3 { font-size: 15px; }
+button, select, input {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--flow); border-color: var(--flow); color: #fff; }
+button.danger { color: var(--bad-text); border-color: var(--bad); }
+button.danger:hover { background: var(--bad-soft); }
+button[aria-pressed="true"] { background: var(--flow-soft); border-color: var(--flow); }
+input[type=number] { width: 84px; }
+:focus-visible { outline: 2px solid var(--flow); outline-offset: 2px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 14px 24px; }
+.vip { font-family: var(--mono); font-weight: 500; font-size: clamp(30px, 4.4vw, 48px); line-height: 1; letter-spacing: -.03em; }
+.lede { margin: 8px 0 0; color: var(--ink-2); max-width: 70ch; }
+.status-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border: 1px solid var(--line);
+  border-radius: 999px; font-size: 13px; color: var(--ink-2); background: var(--panel); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+.dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); } .dot.off { background: var(--muted); }
+
+/* console: map + inspector */
+.console { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; margin-top: 20px; align-items: start; }
+.mapbox { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; position: relative; overflow: hidden; }
+.mapbar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 12px 16px 0; }
+.mapbar p { margin: 0; font-size: 13px; color: var(--muted); }
+#map { display: block; width: 100%; height: auto; user-select: none; }
+#map text { font-family: var(--font); }
+#map .region rect { fill: var(--region); stroke: var(--region-line); stroke-dasharray: 3 4; }
+#map .region .rname { fill: var(--ink); font-size: 13px; font-weight: 600; }
+#map .region .rsub { fill: var(--muted); font-size: 11.5px; font-family: var(--mono); }
+#map .cable { fill: none; stroke: var(--cable); stroke-width: 2.2; stroke-linecap: round; cursor: pointer; transition: stroke .3s, stroke-width .3s; }
+#map .cable.hot { stroke: var(--flow); }
+#map .cable.down { stroke: var(--bad); stroke-dasharray: 4 6; opacity: .75; }
+#map .cable.sel { stroke-width: 5; }
+#map .cable-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
+#map .dev { cursor: pointer; }
+#map .dev .body { fill: var(--device); }
+#map .dev .face { fill: var(--face); }
+#map .dev .face2 { fill: var(--face-2); }
+#map .dev .socket { fill: var(--socket); }
+#map .dev .lbl { fill: var(--label); font-family: var(--mono); font-size: 12px; font-weight: 600; }
+#map .dev .lbl2 { fill: var(--label-2); font-family: var(--mono); font-size: 10.5px; }
+#map .dev .name { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+#map .dev .sub { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+#map .dev .screw { fill: var(--face-2); }
+#map .dev.off { opacity: .42; }
+#map .dev .ring { fill: transparent; stroke: transparent; stroke-width: 2.5; }
+#map .dev.sel .ring, #map .dev:focus-visible .ring { stroke: var(--flow); }
+
+#map .dev:focus-visible { outline: none; }
+#map .dev:focus-visible .ring { stroke-dasharray: 4 3; }
+#map .led { fill: var(--led-off); }
+#map .led.ok { fill: var(--led-ok); }
+#map .led.act { fill: var(--led-act); animation: blink .5s steps(2) infinite; }
+#map .led.warn { fill: var(--warn); }
+#map .led.bad { fill: var(--bad); }
+#map .scr { fill: var(--screen); }
+#map .dev.off .scr { fill: var(--socket); }
+#map .scr.busy { animation: busy 1s ease-in-out infinite alternate; }
+#map .packet { fill: var(--flow); stroke: var(--panel); stroke-width: 1.5; }
+#map .stamp { fill: var(--bad-text); font-size: 11px; font-weight: 600; }
+#map .vipbadge rect { fill: var(--flow-soft); stroke: var(--flow); }
+#map .vipbadge text { fill: var(--ink); font-family: var(--mono); font-size: 12px; font-weight: 500; }
+@keyframes blink { to { fill: var(--led-ok); } }
+@keyframes busy { from { opacity: .55; } to { opacity: 1; } }
+.offline { position: absolute; inset: 44px 0 0 0; display: none; align-items: center; justify-content: center; text-align: center;
+  background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 24px; }
+.offline.show { display: flex; }
+.offline div { max-width: 46ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 4px 16px 12px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 18px; height: 0; border-top: 2.5px solid var(--cable); }
+.sw.hot { border-color: var(--flow); } .sw.down { border-top: 2.5px dashed var(--bad); }
+.lsq { display: inline-block; width: 8px; height: 6px; border-radius: 1px; background: var(--led-ok); }
+.lsq.act { background: var(--led-act); } .lsq.off { background: var(--led-off); border: 1px solid var(--muted); }
+
+/* inspector */
+.inspector { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; position: sticky; top: 12px; }
+.inspector .kind { color: var(--muted); font-size: 13px; }
+.inspector h2 { font-size: 22px; font-family: var(--mono); font-weight: 600; margin-top: 2px; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 14px 0; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; text-align: right; }
+.state { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.state.up { color: var(--good-text); } .state.warn { color: var(--warn-text); } .state.down { color: var(--bad-text); } .state.wait { color: var(--muted); }
+.actions { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 14px; }
+.actions .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.actions .row > button { flex: 1 1 auto; }
+.actions label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+.ports { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; max-height: 210px; overflow-y: auto; }
+.ports li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+
+/* figures */
+.figures { display: grid; grid-template-columns: repeat(6, 1fr); margin: 24px 0 0; padding: 0; list-style: none; }
+.figures li { padding: 2px 18px; border-left: 1px solid var(--line); }
+.figures li:first-child { padding-left: 0; border-left: 0; }
+.figures b { display: block; font-size: 28px; font-weight: 500; line-height: 1.15; }
+.figures span { color: var(--muted); font-size: 13px; }
+
+/* sections */
+section { margin-top: 36px; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 13px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.pad { padding: 16px; }
+.scroll { overflow-x: auto; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.two > div { min-width: 0; }
+.formgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 16px; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.field select, .field input { width: 100%; }
+.weights { display: grid; grid-template-columns: repeat(8, minmax(52px, 1fr)); gap: 8px; margin-top: 12px; }
+.weights label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.weights input { width: 100%; padding: 5px 6px; }
+.formfoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.formfoot .note { font-size: 13px; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip { font-size: 12.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); font-family: var(--mono); }
+.chip.run { border-color: var(--flow); background: var(--flow-soft); color: var(--ink); }
+
+/* chart + tables */
+#chart { position: relative; padding: 12px 14px 6px; }
+#chart .band-off { fill: var(--bad-soft); } #chart .band-on { fill: var(--flow-soft); opacity: .45; }
+#chart .switch-mark { stroke: var(--ink); stroke-dasharray: 4 3; }
+#chart .band-label { font-size: 11.5px; font-weight: 600; font-family: var(--font); }
+.demo-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.demo-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.demo-steps li { border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; font-size: 13px; color: var(--muted); }
+.demo-steps li.now { border-color: var(--flow); color: var(--ink); font-weight: 600; }
+.demo-steps li.done { color: var(--ink-2); }
+.demo-steps li.done::before { content: "✓ "; color: var(--good-text); }
+.phases { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.phase { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.phase.off { border-top: 4px solid var(--bad); } .phase.on { border-top: 4px solid var(--flow); }
+.phase h3 { margin-bottom: 2px; } .phase .small { margin: 0 0 8px; }
+.phase svg { display: block; width: 100%; }
+.phase .bar-off { fill: var(--bad); } .phase .bar-on { fill: var(--flow); }
+.phase .lbl { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.phase .val { fill: var(--ink); font-size: 11px; font-family: var(--font); }
+.phase dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 10px; margin: 10px 0 0; }
+.phase dt { font-size: 12px; color: var(--muted); } .phase dd { margin: 0; font-size: 18px; font-weight: 500; }
+.phase dl > div { min-width: 0; }
+@media (max-width: 860px) { .phases { grid-template-columns: 1fr; } .phase dl { grid-template-columns: repeat(2, 1fr); } }
+#chart svg { display: block; width: 100%; }
+#chart .axis { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+#chart .gridline { stroke: var(--grid); } #chart .baseline { stroke: var(--cable); }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--panel); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; line-height: 1.45; white-space: nowrap; opacity: 0; transition: opacity .12s; z-index: 3; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12.5px; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; }
+tr.down td { background: var(--bad-soft); } tr.warn td { background: var(--warn-soft); }
+tbody tr.click { cursor: pointer; } tbody tr.click:hover td { background: var(--flow-soft); }
+.host { font-weight: 600; font-family: var(--mono); font-size: .95em; }
+.meter { position: relative; width: 90px; height: 8px; background: var(--grid); border-radius: 4px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+.meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--flow); border-radius: 4px; }
+.meter s { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); border-radius: 1px; }
+.spark path { fill: none; stroke: var(--flow); stroke-width: 1.5; } .spark .area { fill: var(--flow-soft); stroke: none; }
+.events { list-style: none; margin: 0; padding: 2px 0; max-height: 340px; overflow-y: auto; }
+.events li { display: grid; grid-template-columns: 70px 20px 1fr; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.events li:last-child { border-bottom: 0; }
+.ic { font-weight: 600; text-align: center; }
+.ic.up { color: var(--good-text); } .ic.down { color: var(--bad-text); } .ic.switch, .ic.link { color: var(--flow); } .ic.settings { color: var(--warn-text); }
+.empty { padding: 20px 14px; color: var(--muted); font-size: 14px; }
+.decisions { max-height: 340px; overflow-y: auto; }
+
+/* banner + toasts */
+.banner { margin-top: 16px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--bad); color: var(--bad-text); background: var(--panel); display: none; }
+.banner.show { display: block; }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 10; max-width: min(380px, calc(100vw - 32px)); }
+.toast { background: var(--ink); color: var(--panel); padding: 10px 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+.toast.err { background: var(--bad); color: #fff; }
+footer { margin-top: 32px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 1180px) {
+  .console { grid-template-columns: 1fr; }
+  .inspector { position: static; }
+  .figures { grid-template-columns: repeat(3, 1fr); row-gap: 16px; }
+  .figures li:nth-child(4) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 760px) {
+  .wrap { padding: 16px 16px 40px; }
+  .two { grid-template-columns: 1fr; }
+  .figures { grid-template-columns: repeat(2, 1fr); }
+  .figures li { border-left: 0; padding-left: 0; }
+  .weights { grid-template-columns: repeat(4, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #map .led.act, #map .scr.busy { animation: none; }
+  #map .cable { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 class="vip" id="vip">10.0.0.100</h1>
+      <p class="lede" id="lede">Connecting to the POX controller&hellip;</p>
+    </div>
+    <div class="status-row">
+      <span class="pill" id="pill-ctl"><span class="dot off"></span>Controller</span>
+      <span class="pill" id="pill-net"><span class="dot off"></span>Network control</span>
+      <button id="pause" aria-pressed="false">Pause updates</button>
+      <button id="theme">Dark theme</button>
+    </div>
+  </header>
+  <div class="banner" id="banner" role="alert"></div>
+
+  <div class="console">
+    <div class="mapbox">
+      <div class="mapbar">
+        <h2>Network</h2>
+        <p>Click any device or cable to inspect and control it. Blue dots are new connections on their way to a server.</p>
+      </div>
+      <svg id="map" viewBox="0 0 1200 610" role="group" aria-label="Network map: campuses, router, core switch and two server racks"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><i class="sw"></i>Cable</span>
+        <span><i class="sw hot"></i>Carrying new connections</span>
+        <span><i class="sw down"></i>Unplugged or dead</span>
+        <span><i class="lsq"></i>Port link</span>
+        <span><i class="lsq act"></i>Port activity</span>
+        <span><i class="lsq off"></i>No link</span>
+      </div>
+      <div class="offline" id="map-offline"><div>
+        <h3>Network control is offline</h3>
+        <p class="muted">The map and its controls come from the Mininet script. Start it with <span class="mono">sudo python3 topo.py</span> and this page connects by itself.</p>
+      </div></div>
+    </div>
+    <aside class="inspector" id="inspector" aria-live="polite"></aside>
+  </div>
+
+  <ul class="figures" id="figures"></ul>
+
+  <section id="demo">
+    <div class="sec-head"><h2>Demo: single path, then load balancing</h2><p>One path to one server first, then the controller turns balancing on</p></div>
+    <div class="panel pad">
+      <div class="demo-bar">
+        <label class="field">Seconds without balancing <input type="number" id="dm-off" min="5" max="55" value="25"></label>
+        <label class="field">Seconds with balancing <input type="number" id="dm-on" min="5" max="55" value="25"></label>
+        <label class="field">Balancing policy
+          <select id="dm-policy">
+            <option value="rr">Round robin</option>
+            <option value="leastconn">Fewest active flows</option>
+            <option value="random">Random</option>
+            <option value="wrr">Weighted round robin</option>
+          </select>
+        </label>
+        <button class="primary" id="dm-start">Run demo</button>
+        <button id="dm-stop" disabled>Stop demo</button>
+        <span class="note" id="dm-note">Needs topo.py running (network control online).</span>
+      </div>
+      <ol class="demo-steps" id="dm-steps">
+        <li data-step="1">1. Reset counters</li>
+        <li data-step="2">2. Load balancing OFF: single path</li>
+        <li data-step="3">3. All 12 clients send traffic</li>
+        <li data-step="4">4. Load balancing ON</li>
+        <li data-step="5">5. Traffic stops, compare</li>
+      </ol>
+      <div class="phases">
+        <div class="phase off"><h3>Without load balancing</h3><p class="small" id="ph-off-sub">Policy: single path</p><div id="ph-off"></div></div>
+        <div class="phase on"><h3>With load balancing</h3><p class="small" id="ph-on-sub">Any balancing policy</p><div id="ph-on"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div>
+      <div class="sec-head"><h2>Send traffic</h2><p>Clients request the page at the virtual IP</p></div>
+      <div class="panel pad">
+        <div class="formgrid">
+          <label class="field">From
+            <select id="tr-target">
+              <option value="all">All 12 clients</option>
+              <option value="campus-a">Campus A (c1 to c6)</option>
+              <option value="campus-b">Campus B (c7 to c12)</option>
+            </select>
+          </label>
+          <label class="field">Kind
+            <select id="tr-mode">
+              <option value="burst">Burst (ApacheBench)</option>
+              <option value="steady">Steady, 5 per second</option>
+            </select>
+          </label>
+          <label class="field">Requests per client <input type="number" id="tr-n" min="1" max="100000" value="300"></label>
+          <label class="field">At once (burst only) <input type="number" id="tr-c" min="1" max="200" value="10"></label>
+        </div>
+        <div class="formfoot">
+          <button class="primary" id="tr-start">Start traffic</button>
+          <button id="tr-stop">Stop traffic</button>
+          <span class="note" id="tr-note"></span>
+        </div>
+        <div class="chips" id="tr-chips"></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Controller settings</h2><p>Applied live, no restart</p></div>
+      <form class="panel pad" id="settings" autocomplete="off">
+        <div class="formgrid">
+          <label class="field">Policy
+            <select id="st-policy">
+              <option value="single">Single path (no balancing)</option>
+              <option value="rr">Round robin</option>
+              <option value="wrr">Weighted round robin</option>
+              <option value="leastconn">Fewest active flows</option>
+              <option value="random">Random</option>
+            </select>
+          </label>
+          <label class="field">Idle timeout (s) <input type="number" id="st-idle" min="1" max="300"></label>
+          <label class="field">Hard timeout (s, 0 = none) <input type="number" id="st-hard" min="0" max="3600"></label>
+          <label class="field">Health probe every (s) <input type="number" id="st-probe" min="0.5" max="30" step="0.5"></label>
+        </div>
+        <div class="weights" id="st-weights"></div>
+        <div class="formfoot">
+          <button class="primary" type="submit" id="st-apply">Apply settings</button>
+          <button type="button" id="st-revert">Undo changes</button>
+          <button type="button" id="st-reset">Reset counters</button>
+          <span class="note" id="st-note">Weights only matter for weighted round robin.</span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>New connections per second</h2><p>All servers together, last 2 minutes. Hover for the split per server.</p></div>
+    <div class="panel" id="chart"><div class="tip" id="tip"></div></div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Servers</h2><p>The thin upright mark on each share bar is the share the policy aims for. Click a row to select the server.</p></div>
+    <div class="panel scroll">
+      <table>
+        <thead><tr><th>Health</th><th>Server</th><th>Rack, switch port</th><th class="num">Weight</th><th>Active flow rules</th>
+          <th class="num">Connections</th><th>Share</th><th>Last 2 min</th><th class="num">Failures</th><th class="num">Last web check</th></tr></thead>
+        <tbody id="servers"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Switches</h2><p>As the controller sees them</p></div>
+    <div class="panel scroll">
+      <table>
+        <thead><tr><th>Switch</th><th>Role</th><th>Datapath ID</th><th>Controller link</th><th class="num">Ports up</th>
+          <th class="num">Packet-ins</th><th class="num">Rules installed</th><th class="num">MACs learned</th></tr></thead>
+        <tbody id="switches"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="two">
+    <div>
+      <div class="sec-head"><h2>Recent decisions</h2><p>Newest first</p></div>
+      <div class="panel decisions scroll">
+        <table>
+          <thead><tr><th>Time</th><th>Client</th><th class="num">Client port</th><th>Sent to</th></tr></thead>
+          <tbody id="recent"></tbody>
+        </table>
+      </div>
+    </div>
+    <div>
+      <div class="sec-head"><h2>Events</h2><p>Health changes, switches, cables, settings</p></div>
+      <div class="panel"><ul class="events" id="events"></ul></div>
+    </div>
+  </section>
+
+  <footer id="footer">Controller data from /stats every second, network data from port 8081.</footer>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var NET_API = location.protocol + "//" + (location.hostname || "127.0.0.1") + ":8081";
+  var POLICY = {
+    single: ["Single path (no load balancing)", "every new connection takes the same path to one server, the first healthy one"],
+    rr: ["Round robin", "each new connection goes to the next healthy server in turn"],
+    random: ["Random", "each new connection goes to a randomly picked healthy server"],
+    leastconn: ["Fewest active flows", "each new connection goes to the healthy server with the fewest active flow rules"],
+    wrr: ["Weighted round robin", "servers take turns, a weight-3 server gets three turns for each turn of a weight-1 server"]
+  };
+  var S = { stats: null, topo: null, ctlOk: false, netOk: false, paused: false, sel: null, dirty: false,
+            lastPulse: 0, map: null, actKey: "", trForm: {n: 300, c: 10},
+            phases: {off: [], on: [], offPolicy: null, onPolicy: null, lastT: 0}, demo: null };
+  var $ = function (id) { return document.getElementById(id); };
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---------------- helpers ----------------
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]; }); }
+  function dur(s) {
+    if (s == null) return "–"; s = Math.round(s);
+    if (s < 60) return s + " s";
+    if (s < 3600) return Math.floor(s / 60) + " min " + (s % 60) + " s";
+    return Math.floor(s / 3600) + " h " + Math.floor((s % 3600) / 60) + " min";
+  }
+  function ago(s) { return s == null ? "never" : s < 1 ? "just now" : dur(s) + " ago"; }
+  function clock(t) { return new Date(t * 1000).toTimeString().slice(0, 8); }
+  function fmt(n) { return Number(n || 0).toLocaleString(); }
+  function el(name, attrs, parent) {
+    var e = document.createElementNS(NS, name);
+    for (var k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function txt(parent, x, y, s, cls, extra) {
+    var t = el("text", Object.assign({x: x, y: y, "class": cls}, extra || {}), parent);
+    t.textContent = s; return t;
+  }
+  function toast(msg, err) {
+    var d = document.createElement("div");
+    d.className = "toast" + (err ? " err" : ""); d.textContent = msg;
+    $("toasts").appendChild(d);
+    setTimeout(function () { d.remove(); }, err ? 6000 : 3200);
+  }
+  function post(url, body) {
+    return fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)})
+      .then(function (r) { return r.json().then(function (j) { if (!r.ok || j.ok === false) throw new Error(j.error || ("HTTP " + r.status)); return j; }); });
+  }
+  function netPost(path, body, okMsg) {
+    return post(NET_API + path, body).then(function (j) { toast(okMsg || j.message); refresh(); return j; })
+      .catch(function (e) { toast(e.message === "Failed to fetch" ? "Network control is offline. Start topo.py first." : e.message, true); });
+  }
+  function jain(xs) { var s = 0, q = 0; xs.forEach(function (x) { s += x; q += x * x; }); return q ? s * s / (xs.length * q) : null; }
+
+  // ---------------- theme + pause ----------------
+  function isDark() { var t = document.documentElement.getAttribute("data-theme"); return t ? t === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches; }
+  function setTheme(t) { document.documentElement.setAttribute("data-theme", t); $("theme").textContent = t === "dark" ? "Light theme" : "Dark theme"; try { localStorage.setItem("sdnlb-theme", t); } catch (e) {} }
+  try { var saved = localStorage.getItem("sdnlb-theme"); if (saved) setTheme(saved); } catch (e) {}
+  $("theme").textContent = isDark() ? "Light theme" : "Dark theme";
+  $("theme").onclick = function () { setTheme(isDark() ? "light" : "dark"); render(); };
+  $("pause").onclick = function () { S.paused = !S.paused; this.setAttribute("aria-pressed", S.paused); this.textContent = S.paused ? "Resume updates" : "Pause updates"; };
+
+  // ---------------- lookups across the two data sources ----------------
+  function nodeByName(n) { return S.topo ? S.topo.nodes.filter(function (x) { return x.name === n; })[0] : null; }
+  function nameByIp(ip) {
+    if (!S.topo) return ip;
+    for (var i = 0; i < S.topo.nodes.length; i++) if (S.topo.nodes[i].ip === ip) return S.topo.nodes[i].name;
+    return ip;
+  }
+  function srvStats(ip) { return S.stats && S.stats.servers ? S.stats.servers.filter(function (s) { return s.ip === ip; })[0] : null; }
+  function swStats(dpidHex) {
+    if (!S.stats || !S.stats.switches) return null;
+    var n = parseInt(dpidHex, 16);
+    return S.stats.switches.filter(function (s) { return s.dpid_int === n; })[0] || null;
+  }
+  function linkById(id) { return S.topo ? S.topo.links.filter(function (l) { return l.id === id; })[0] : null; }
+  function linkBetween(a, b) { return S.topo ? S.topo.links.filter(function (l) { return (l.a === a && l.b === b) || (l.a === b && l.b === a); })[0] : null; }
+  function health(srv) {
+    var node = nodeByName(nameByIp(srv.ip));
+    if (node && node.power === false) return ["down", "Switched off", "●"];
+    return {up: ["up", "Up", "▲"], service_down: ["warn", "Web service stopped", "■"],
+            down: ["down", "Down", "▼"], unknown: ["wait", "Waiting for probes", "○"]}[srv.state] || ["wait", srv.state, "○"];
+  }
+
+  // ---------------- the network map ----------------
+  // geometry for this campus + data center network
+  var G = {
+    campus: {"campus-a": {x: 16, y: 16, sw: "s11"}, "campus-b": {x: 16, y: 318, sw: "s12"}},
+    rack: {"rack-1": {x: 846, y: 16, sw: "s2"}, "rack-2": {x: 846, y: 318, sw: "s3"}},
+    router: {x: 452, y: 305}, core: {x: 552, y: 288, w: 240}
+  };
+  var CW = 330, CH = 276, RW = 338, RH = 276;
+
+  function switchGeom(name) {
+    // returns {x, y, w, h, ports: {no: {x, y}}} for each switch drawing
+    var g, i, ports = {};
+    var campus = name === "s11" ? G.campus["campus-a"] : name === "s12" ? G.campus["campus-b"] : null;
+    var rack = name === "s2" ? G.rack["rack-1"] : name === "s3" ? G.rack["rack-2"] : null;
+    if (campus) {
+      g = {x: campus.x + 24, y: campus.y + 50, w: 282, h: 34};
+      for (i = 2; i <= 8; i++) ports[i] = {x: g.x + 84 + (i - 2) * 22, y: g.y + 24};
+      ports[1] = {x: g.x + g.w - 22, y: g.y + 17, uplink: true};
+    } else if (rack) {
+      g = {x: rack.x + 18, y: rack.y + 40, w: 278, h: 30};
+      ports[1] = {x: g.x + 72, y: g.y + 15, uplink: true};
+      for (i = 2; i <= 8; i++) ports[i] = {x: g.x + 112 + (i - 2) * 22, y: g.y + 21};
+    } else {
+      g = {x: G.core.x, y: G.core.y, w: G.core.w, h: 36};
+      for (i = 1; i <= 8; i++) ports[i] = {x: g.x + 70 + (i - 1) * 21, y: g.y + 24};
+    }
+    g.ports = ports; return g;
+  }
+
+  function buildMap() {
+    var svg = $("map"); svg.textContent = "";
+    var m = {nodes: {}, cables: {}, ledOf: {}, layers: {}};
+    m.layers.regions = el("g", {}, svg);
+    m.layers.cables = el("g", {}, svg);
+    m.layers.devices = el("g", {}, svg);
+    m.layers.packets = el("g", {"pointer-events": "none"}, svg);
+    var topo = S.topo;
+    var byGroup = {};
+    topo.nodes.forEach(function (n) { (byGroup[n.group] = byGroup[n.group] || []).push(n); });
+    function num(n) { return parseInt(n.name.replace(/\D/g, ""), 10); }
+
+    // regions
+    Object.keys(G.campus).forEach(function (k) {
+      var c = G.campus[k], g = el("g", {"class": "region"}, m.layers.regions);
+      el("rect", {x: c.x, y: c.y, width: CW, height: CH, rx: 12}, g);
+      var label = (topo.groups[k] || k).split(/\s{2,}/);
+      txt(g, c.x + 14, c.y + 24, label[0], "rname");
+      if (label[1]) txt(g, c.x + CW - 14, c.y + 24, label[1], "rsub", {"text-anchor": "end"});
+    });
+    Object.keys(G.rack).forEach(function (k) {
+      var r = G.rack[k], g = el("g", {"class": "region"}, m.layers.regions);
+      el("rect", {x: r.x, y: r.y, width: RW, height: RH, rx: 12}, g);
+      txt(g, r.x + 14, r.y + 24, topo.groups[k] || k, "rname");
+      txt(g, r.x + RW - 14, r.y + 24, "10.0.0.0/24", "rsub", {"text-anchor": "end"});
+    });
+
+    // devices
+    function devGroup(name, label) {
+      var g = el("g", {"class": "dev", tabindex: 0, role: "button", "aria-label": label}, m.layers.devices);
+      g.addEventListener("click", function (e) { e.stopPropagation(); select({type: "node", id: name}); });
+      g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select({type: "node", id: name}); } });
+      m.nodes[name] = {g: g, leds: {}};
+      return g;
+    }
+    function drawSwitch(name, title) {
+      var s = switchGeom(name), g = devGroup(name, "Switch " + name + ", " + title), N = m.nodes[name];
+      el("rect", {"class": "ring", x: s.x - 5, y: s.y - 5, width: s.w + 10, height: s.h + 10, rx: 8}, g);
+      el("rect", {"class": "body", x: s.x, y: s.y, width: s.w, height: s.h, rx: 4}, g);
+      el("rect", {"class": "face", x: s.x + 8, y: s.y + 3, width: s.w - 16, height: s.h - 6, rx: 2}, g);
+      el("circle", {"class": "screw", cx: s.x + 4, cy: s.y + s.h / 2, r: 1.8}, g);
+      el("circle", {"class": "screw", cx: s.x + s.w - 4, cy: s.y + s.h / 2, r: 1.8}, g);
+      txt(g, s.x + 16, s.y + s.h / 2 + 4, name, "lbl");
+      N.power = el("rect", {"class": "led", x: s.x + 52, y: s.y + s.h / 2 - 2, width: 5, height: 4, rx: 1}, g);
+      Object.keys(s.ports).forEach(function (p) {
+        var P = s.ports[p];
+        if (P.uplink) {
+          el("rect", {"class": "face2", x: P.x - 9, y: P.y - 7, width: 18, height: 14, rx: 2}, g);
+          el("rect", {"class": "socket", x: P.x - 6, y: P.y - 3, width: 12, height: 7, rx: 1}, g);
+          N.leds[p] = el("rect", {"class": "led", x: P.x - 6, y: P.y - 6, width: 4, height: 2.5}, g);
+        } else {
+          el("rect", {"class": "socket", x: P.x - 7, y: P.y - 6, width: 14, height: 10, rx: 1.5}, g);
+          N.leds[p] = el("rect", {"class": "led", x: P.x - 6, y: P.y - 12, width: 5, height: 3, rx: .5}, g);
+        }
+      });
+      N.stamp = txt(g, s.x + s.w / 2, s.y - 7, "", "stamp", {"text-anchor": "middle"});
+      N.geom = s;
+      return g;
+    }
+
+    // campus switches + laptops
+    ["campus-a", "campus-b"].forEach(function (k) {
+      var c = G.campus[k], sw = c.sw;
+      drawSwitch(sw, "campus switch");
+      var clients = (byGroup[k] || []).filter(function (n) { return n.kind === "client"; }).sort(function (a, b) { return num(a) - num(b); });
+      clients.forEach(function (n, i) {
+        var x = c.x + 46 + i * 48, y = c.y + 176, g = devGroup(n.name, "Client " + n.name + " " + n.ip);
+        el("rect", {"class": "ring", x: x - 25, y: y - 22, width: 50, height: 66, rx: 8}, g);
+        el("rect", {"class": "body", x: x - 19, y: y - 16, width: 38, height: 26, rx: 3}, g);
+        var scr = el("rect", {"class": "scr", x: x - 16, y: y - 13, width: 32, height: 20, rx: 1}, g);
+        el("path", {"class": "face", d: "M" + (x - 23) + "," + (y + 14) + "h46l-3,5h-40z"}, g);
+        txt(g, x, y + 33, n.name, "name", {"text-anchor": "middle"});
+        m.nodes[n.name].screen = scr;
+        m.nodes[n.name].anchor = {x: x, y: y - 16};
+        m.nodes[n.name].badge = txt(g, x, y + 47, "", "sub", {"text-anchor": "middle"});
+      });
+    });
+
+    // router
+    (function () {
+      var R = G.router, g = devGroup("r1", "Router r1");
+      el("circle", {"class": "ring", cx: R.x, cy: R.y, r: 40}, g);
+      el("circle", {"class": "body", cx: R.x, cy: R.y, r: 33}, g);
+      el("ellipse", {"class": "face", cx: R.x, cy: R.y - 4, rx: 27, ry: 21}, g);
+      // four arrows: the classic router symbol
+      var a = "var(--label)";
+      [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d, i) {
+        var inward = i % 2 === 0;
+        var x1 = R.x + d[0] * (inward ? 20 : 6), y1 = R.y - 4 + d[1] * (inward ? 16 : 5);
+        var x2 = R.x + d[0] * (inward ? 7 : 20), y2 = R.y - 4 + d[1] * (inward ? 6 : 16);
+        el("line", {x1: x1, y1: y1, x2: x2, y2: y2, stroke: a, "stroke-width": 2.4, "stroke-linecap": "round"}, g);
+        var ang = Math.atan2(y2 - y1, x2 - x1), hx = x2, hy = y2;
+        el("path", {d: "M" + hx + "," + hy + "L" + (hx - 6 * Math.cos(ang - .55)) + "," + (hy - 6 * Math.sin(ang - .55)) +
+          "M" + hx + "," + hy + "L" + (hx - 6 * Math.cos(ang + .55)) + "," + (hy - 6 * Math.sin(ang + .55)),
+          stroke: a, "stroke-width": 2.2, "stroke-linecap": "round", fill: "none"}, g);
+      });
+      m.nodes.r1.power = el("rect", {"class": "led", x: R.x - 3, y: R.y + 21, width: 6, height: 3, rx: 1}, g);
+      txt(g, R.x, R.y + 52, "r1  router", "name", {"text-anchor": "middle"});
+      m.nodes.r1.ips = txt(g, R.x, R.y + 66, "", "sub", {"text-anchor": "middle"});
+      m.nodes.r1.stamp = txt(g, R.x, R.y - 44, "", "stamp", {"text-anchor": "middle"});
+    })();
+
+    // core switch
+    drawSwitch("s1", "core switch, load balancer");
+    (function () {
+      var s = switchGeom("s1"), g = m.nodes.s1.g;
+      txt(g, s.x, s.y - 26, "Core switch s1", "name");
+      txt(g, s.x, s.y - 12, "load balancer", "sub");
+      var b = el("g", {"class": "vipbadge"}, g);
+      el("rect", {x: s.x + s.w / 2 - 68, y: s.y + s.h + 14, width: 136, height: 24, rx: 12}, b);
+      m.nodes.s1.vip = txt(b, s.x + s.w / 2, s.y + s.h + 30, "VIP " + topo.vip, "", {"text-anchor": "middle"});
+    })();
+
+    // racks: top-of-rack switch + servers as rack units
+    ["rack-1", "rack-2"].forEach(function (k) {
+      var r = G.rack[k], sw = r.sw;
+      var rg = el("g", {}, m.layers.regions);
+      el("rect", {x: r.x + 10, y: r.y + 34, width: RW - 20, height: RH - 44, rx: 4, fill: "none", stroke: "var(--region-line)", "stroke-width": 1.5}, rg);
+      drawSwitch(sw, "top-of-rack switch");
+      var servers = (byGroup[k] || []).filter(function (n) { return n.kind === "server"; }).sort(function (a, b) { return num(a) - num(b); });
+      servers.forEach(function (n, i) {
+        var x = r.x + 18, y = r.y + 84 + i * 46, w = 278, h = 40, g = devGroup(n.name, "Server " + n.name + " " + n.ip), N = m.nodes[n.name];
+        el("rect", {"class": "ring", x: x - 4, y: y - 3, width: w + 8, height: h + 6, rx: 7}, g);
+        el("rect", {"class": "body", x: x, y: y, width: w, height: h, rx: 3}, g);
+        el("rect", {"class": "face", x: x + 8, y: y + 3, width: w - 16, height: h - 6, rx: 2}, g);
+        el("circle", {"class": "screw", cx: x + 4, cy: y + 8, r: 1.6}, g);
+        el("circle", {"class": "screw", cx: x + 4, cy: y + h - 8, r: 1.6}, g);
+        el("circle", {"class": "screw", cx: x + w - 4, cy: y + 8, r: 1.6}, g);
+        el("circle", {"class": "screw", cx: x + w - 4, cy: y + h - 8, r: 1.6}, g);
+        N.power = el("rect", {"class": "led", x: x + 14, y: y + 10, width: 5, height: 4, rx: 1}, g);
+        N.status = el("circle", {"class": "led", cx: x + 16.5, cy: y + 28, r: 4}, g);
+        txt(g, x + 28, y + 17, n.name, "lbl");
+        txt(g, x + 28, y + 31, n.ip, "lbl2");
+        for (var d = 0; d < 4; d++) {
+          el("rect", {"class": "face2", x: x + 112 + d * 26, y: y + 7, width: 22, height: 26, rx: 2}, g);
+          el("rect", {"class": "socket", x: x + 116 + d * 26, y: y + 18, width: 14, height: 2}, g);
+        }
+        N.load = el("rect", {x: x + 214, y: y + 30, width: 0, height: 3, rx: 1.5, fill: "var(--flow)"}, g);
+        el("rect", {x: x + 214, y: y + 30, width: 42, height: 3, rx: 1.5, fill: "var(--socket)", opacity: .6}, g);
+        N.web = txt(g, x + 210, y + 22, "", "lbl2");
+        el("rect", {"class": "socket", x: x + w - 18, y: y + 15, width: 10, height: 9, rx: 1}, g);
+        N.nic = {x: x + w - 13, y: y + 20};
+      });
+    });
+
+    // cables
+    topo.links.forEach(function (l) {
+      var d = cablePath(m, l);
+      if (!d) return;
+      var hit = el("path", {"class": "cable-hit", d: d}, m.layers.cables);
+      var p = el("path", {"class": "cable", d: d}, m.layers.cables);
+      hit.addEventListener("click", function (e) { e.stopPropagation(); select({type: "link", id: l.id}); });
+      p.addEventListener("click", function (e) { e.stopPropagation(); select({type: "link", id: l.id}); });
+      m.cables[l.id] = {path: p, a: l.a, b: l.b};
+    });
+    svg.onclick = function () { select(null); };
+    S.map = m;
+    S.mapKey = mapKey();
+  }
+
+  function portPoint(m, sw, port) {
+    var g = m.nodes[sw] && m.nodes[sw].geom; if (!g) return null;
+    return g.ports[port] || null;
+  }
+  function cablePath(m, l) {
+    var a = l.a, b = l.b, kind = function (n) { var x = nodeByName(n); return x ? x.kind : null; };
+    var swName, other, port;
+    if (kind(a) === "switch" && kind(b) === "switch") {
+      // core -> rack trunk
+      var core = a === "s1" ? a : b, rack = core === a ? b : a;
+      var p1 = portPoint(m, core, core === a ? l.a_port : l.b_port), p2 = portPoint(m, rack, core === a ? l.b_port : l.a_port);
+      if (!p1 || !p2) return null;
+      var up = p2.y < p1.y, sy = p1.y + (up ? -16 : 12);
+      return "M" + p1.x + "," + p1.y + " L" + p1.x + "," + sy + " C" + (p1.x + 60) + "," + sy + " " + (p2.x - 120) + "," + p2.y + " " + (p2.x - 9) + "," + p2.y;
+    }
+    if (kind(a) === "switch") { swName = a; other = b; port = l.a_port; } else { swName = b; other = a; port = l.b_port; }
+    var P = portPoint(m, swName, port); if (!P) return null;
+    var k = kind(other), N = m.nodes[other];
+    if (k === "client") {
+      var A = N.anchor, my = (A.y + P.y + 6) / 2;
+      return "M" + A.x + "," + A.y + " C" + A.x + "," + my + " " + P.x + "," + my + " " + P.x + "," + (P.y + 4);
+    }
+    if (k === "server") {
+      var lane = G.rack[nodeByName(other).group].x + RW - 26 + (parseInt(other.replace(/\D/g, ""), 10) - 1) % 4 * 4;
+      var nic = N.nic, py = P.y + 5;
+      return "M" + P.x + "," + py + " V" + (py + 6 + (port - 2) * 2) + " H" + lane + " V" + nic.y + " H" + (nic.x + 5);
+    }
+    if (k === "router") {
+      var R = G.router;
+      if (swName === "s1") return "M" + (R.x + 33) + "," + R.y + " C" + (R.x + 70) + "," + R.y + " " + (P.x - 30) + "," + (P.y - 30) + " " + P.x + "," + (P.y - 6);
+      var top = P.y < R.y, ry = R.y + (top ? -24 : 24), rx = R.x - 22;
+      return "M" + (P.x + 9) + "," + P.y + " C" + (P.x + 70) + "," + P.y + " " + (rx - 40) + "," + ry + " " + rx + "," + ry;
+    }
+    return null;
+  }
+  function mapKey() { return S.topo ? S.topo.nodes.map(function (n) { return n.name; }).join(",") + "|" + S.topo.links.map(function (l) { return l.id; }).join(",") : ""; }
+
+  // which cables a decision's packets cross: client -> campus switch -> router -> core -> rack -> server
+  function route(clientName, serverName) {
+    var c = nodeByName(clientName), s = nodeByName(serverName);
+    if (!c || !s) return null;
+    var hops = [clientName, c.switch, "r1", "s1", s.switch, serverName], segs = [];
+    for (var i = 0; i < hops.length - 1; i++) {
+      var l = linkBetween(hops[i], hops[i + 1]);
+      if (!l) return null;
+      segs.push({id: l.id, from: hops[i]});
+    }
+    return segs;
+  }
+  function animate(segs) {
+    var m = S.map, parts = segs.map(function (s) { var c = m.cables[s.id]; return c ? {p: c.path, rev: c.a !== s.from, L: c.path.getTotalLength()} : null; }).filter(Boolean);
+    if (!parts.length) return;
+    var total = parts.reduce(function (a, p) { return a + p.L; }, 0), T = 1300, t0 = null;
+    var dot = el("circle", {r: 4.5, "class": "packet"}, m.layers.packets);
+    function step(ts) {
+      if (t0 === null) t0 = ts;
+      var f = Math.min(1, (ts - t0) / T), d = f * total, i = 0;
+      while (i < parts.length - 1 && d > parts[i].L) { d -= parts[i].L; i++; }
+      var P = parts[i], pt = P.p.getPointAtLength(P.rev ? P.L - d : d);
+      dot.setAttribute("cx", pt.x); dot.setAttribute("cy", pt.y);
+      if (f < 1) requestAnimationFrame(step); else dot.remove();
+    }
+    requestAnimationFrame(step);
+  }
+
+  function renderMap() {
+    var off = $("map-offline");
+    off.classList.toggle("show", !S.netOk);
+    if (!S.topo) return;
+    if (!S.map || S.mapKey !== mapKey()) buildMap();
+    var m = S.map, st = S.stats || {}, now = st.now || Date.now() / 1000;
+
+    // which cables carried new connections in the last 3 seconds
+    var hot = {}, hotPort = {};
+    (st.recent || []).forEach(function (r) {
+      if (now - r[0] > 3) return;
+      var segs = route(nameByIp(r[1]), nameByIp(r[3]));
+      (segs || []).forEach(function (s) { hot[s.id] = (hot[s.id] || 0) + 1; });
+    });
+    var maxHot = Math.max(1, Math.max.apply(null, Object.keys(hot).map(function (k) { return hot[k]; }).concat([0])));
+
+    S.topo.links.forEach(function (l) {
+      var c = m.cables[l.id]; if (!c) return;
+      var cls = "cable" + (!l.up ? " down" : hot[l.id] ? " hot" : "") + (S.sel && S.sel.type === "link" && S.sel.id === l.id ? " sel" : "");
+      c.path.setAttribute("class", cls);
+      c.path.style.strokeWidth = l.up && hot[l.id] ? (2.2 + 3 * hot[l.id] / maxHot).toFixed(1) : "";
+      [[l.a, l.a_port], [l.b, l.b_port]].forEach(function (end) {
+        var N = m.nodes[end[0]];
+        if (N && N.leds && N.leds[end[1]]) hotPort[end[0] + ":" + end[1]] = {led: N.leds[end[1]], up: l.up, hot: !!hot[l.id]};
+      });
+    });
+
+    S.topo.nodes.forEach(function (n) {
+      var N = m.nodes[n.name]; if (!N) return;
+      var on = n.power !== false, selected = S.sel && S.sel.type === "node" && S.sel.id === n.name;
+      N.g.setAttribute("class", "dev" + (on ? "" : " off") + (selected ? " sel" : ""));
+      if (N.power) N.power.setAttribute("class", "led" + (on ? " ok" : ""));
+      if (N.stamp) N.stamp.textContent = on ? "" : "Switched off";
+      if (n.kind === "switch") {
+        var sws = swStats(n.dpid), ctlUp = sws && sws.connected;
+        Object.keys(N.leds).forEach(function (p) {
+          var h = hotPort[n.name + ":" + p];
+          N.leds[p].setAttribute("class", "led" + (!on || !h || !h.up ? "" : h.hot && !reduceMotion ? " act" : " ok"));
+        });
+        if (on && sws === null && S.ctlOk) N.stamp.textContent = "Not connected to controller";
+        else if (on && sws && !ctlUp) N.stamp.textContent = "Lost controller";
+      } else if (n.kind === "server") {
+        var s = srvStats(n.ip), hh = s ? health(s) : ["wait", "", ""];
+        N.status.setAttribute("class", "led " + (hh[0] === "up" ? "ok" : hh[0] === "warn" ? "warn" : hh[0] === "down" ? "bad" : ""));
+        N.web.textContent = !on ? "no power" : n.web ? "web on" : "web off";
+        var maxA = Math.max(1, Math.max.apply(null, (st.servers || []).map(function (x) { return x.active; }).concat([1])));
+        N.load.setAttribute("width", s && on ? (42 * s.active / maxA).toFixed(1) : 0);
+      } else if (n.kind === "client") {
+        var t = n.traffic, busy = t && t.running;
+        N.screen.setAttribute("class", "scr" + (busy && !reduceMotion ? " busy" : ""));
+        N.badge.textContent = busy ? (t.mode === "steady" ? "steady" : "burst") : "";
+      } else if (n.kind === "router") {
+        N.ips.textContent = (n.ips || []).length + " subnets";
+      }
+    });
+    if (st.vip && m.nodes.s1 && m.nodes.s1.vip) m.nodes.s1.vip.textContent = "VIP " + st.vip;
+
+    // packets for decisions made since the last update
+    var fresh = (st.recent || []).filter(function (r) { return r[0] > S.lastPulse; });
+    if (S.lastPulse === 0) fresh = [];
+    if (st.recent && st.recent.length) S.lastPulse = Math.max(S.lastPulse, st.recent[st.recent.length - 1][0]);
+    if (!reduceMotion && !S.paused) fresh.slice(-10).forEach(function (r, k) {
+      var segs = route(nameByIp(r[1]), nameByIp(r[3]));
+      if (segs) setTimeout(function () { animate(segs); }, k * 90);
+    });
+  }
+
+  // ---------------- inspector ----------------
+  function select(sel) { S.sel = sel; S.actKey = ""; render(); }
+
+  function fact(k, v) { return "<dt>" + k + "</dt><dd>" + v + "</dd>"; }
+  function stateHtml(h) { return "<span class='state " + h[0] + "'>" + h[2] + " " + h[1] + "</span>"; }
+
+  function renderInspector() {
+    var box = $("inspector"), sel = S.sel, html = "", acts = "", key = "";
+    if (!sel || (sel.type === "node" && !nodeByName(sel.id)) || (sel.type === "link" && !linkById(sel.id))) {
+      if (S.actKey !== "none") {
+        box.innerHTML = "<div class='kind'>Nothing selected</div><h2 style='font-family:var(--font)'>Control panel</h2>" +
+          "<p class='hint'>Click a laptop, the router, a switch, a server or any cable on the map. Its details and controls appear here.</p>" +
+          "<p class='hint'>Try this for a demo: start traffic from all clients below, then switch off srv1 here and watch the other servers take over.</p>";
+        S.actKey = "none";
+      }
+      return;
+    }
+    if (sel.type === "link") {
+      var l = linkById(sel.id);
+      html = "<div class='kind'>Cable</div><h2>" + esc(l.a) + " ↔ " + esc(l.b) + "</h2><dl class='facts'>" +
+        fact("State", l.up ? stateHtml(["up", "Plugged in, link up", "▲"]) : stateHtml(["down", "Unplugged or no link", "▼"])) +
+        fact(esc(l.a) + " side", "<span class='mono'>" + esc(l.a_intf) + "</span>" + (l.a_port != null ? ", port " + l.a_port : "")) +
+        fact(esc(l.b) + " side", "<span class='mono'>" + esc(l.b_intf) + "</span>" + (l.b_port != null ? ", port " + l.b_port : "")) + "</dl>";
+      key = "link|" + l.id + "|" + l.up;
+      acts = "<div class='row'><button class='" + (l.up ? "danger" : "primary") + "' data-act='cable' data-up='" + (!l.up) + "'>" + (l.up ? "Unplug this cable" : "Plug this cable back in") + "</button></div>" +
+        "<p class='hint'>Unplugging takes the interface down on both ends, like pulling the cable out.</p>";
+    } else {
+      var n = nodeByName(sel.id), on = n.power !== false;
+      if (n.kind === "server") {
+        var s = srvStats(n.ip) || {}, h = s.state ? health(s) : ["wait", "No data from controller", "○"];
+        var total = (S.stats && S.stats.decisions) || 0;
+        html = "<div class='kind'>Server in " + esc((S.topo.groups[n.group] || n.group)) + "</div><h2>" + esc(n.name) + "</h2><dl class='facts'>" +
+          fact("Health (controller)", stateHtml(h)) + fact("Power", on ? "On" : "Off") + fact("Web service", n.web ? "Running on port 80" : "Stopped") +
+          fact("IP address", "<span class='mono'>" + esc(n.ip) + "</span>") + fact("MAC address", "<span class='mono'>" + esc(n.mac) + "</span>") +
+          fact("Weight", s.weight != null ? s.weight : "–") + fact("Active flow rules", s.active != null ? s.active : "–") +
+          fact("Connections", fmt(s.total) + (total ? " (" + Math.round(100 * (s.total || 0) / total) + "%)" : "")) +
+          fact("Times failed", s.down_count != null ? s.down_count : "–") + fact("Last web check", ago(s.web_check)) + "</dl>";
+        key = "srv|" + n.name + "|" + on + "|" + n.web;
+        acts = "<div class='row'><button class='" + (on ? "danger" : "primary") + "' data-act='power' data-on='" + !on + "'>" + (on ? "Switch off server" : "Switch on server") + "</button></div>" +
+          "<div class='row'><button data-act='web' data-on='" + !n.web + "'" + (on ? "" : " disabled") + ">" + (n.web ? "Stop web service only" : "Start web service") + "</button></div>" +
+          "<p class='hint'>Switching off unplugs the machine: ARP and web checks both fail. Stopping only the web service leaves the machine answering ARP, so only the TCP check catches it.</p>";
+      } else if (n.kind === "client") {
+        var c = (S.stats && S.stats.clients && S.stats.clients[n.ip]) || null, t = n.traffic;
+        var tline = !t ? "None yet" : t.running ? "Sending (" + t.mode + "), " + dur(t.seconds) :
+          t.mode === "burst" && t.rps != null ? "Finished: " + t.rps + " req/s, " + t.failed + " failed" : "Finished";
+        html = "<div class='kind'>Client in " + esc((S.topo.groups[n.group] || n.group).split(/\s{2,}/)[0]) + "</div><h2>" + esc(n.name) + "</h2><dl class='facts'>" +
+          fact("Power", on ? "On" : "Off") + fact("IP address", "<span class='mono'>" + esc(n.ip) + "</span>") +
+          fact("Gateway", "<span class='mono'>" + esc(n.ip.split(".").slice(0, 3).join(".")) + ".254</span>") +
+          fact("Connections made", c ? fmt(c.total) : "0") + fact("Last sent to", c ? "<span class='host'>" + esc(nameByIp(c.server)) + "</span>" : "–") +
+          fact("Traffic", tline) + "</dl>";
+        key = "cli|" + n.name + "|" + on + "|" + !!(t && t.running);
+        acts = "<div class='row'><label>Requests <input type='number' id='in-n' min='1' max='100000' value='" + S.trForm.n + "'></label>" +
+          "<label>At once <input type='number' id='in-c' min='1' max='200' value='" + S.trForm.c + "'></label></div>" +
+          "<div class='row'><button class='primary' data-act='traffic' data-mode='burst'" + (on ? "" : " disabled") + ">Send burst</button>" +
+          "<button data-act='traffic' data-mode='steady'" + (on ? "" : " disabled") + ">Send steady</button>" +
+          "<button data-act='traffic-stop'" + (t && t.running ? "" : " disabled") + ">Stop</button></div>" +
+          "<div class='row'><button class='" + (on ? "danger" : "primary") + "' data-act='power' data-on='" + !on + "'>" + (on ? "Switch off client" : "Switch on client") + "</button></div>";
+      } else if (n.kind === "switch") {
+        var sw = swStats(n.dpid);
+        var ports = S.topo.links.filter(function (l) { return l.a === n.name || l.b === n.name; }).map(function (l) {
+          var mine = l.a === n.name, port = mine ? l.a_port : l.b_port, peer = mine ? l.b : l.a;
+          return {port: port, peer: peer, up: l.up};
+        }).sort(function (a, b) { return a.port - b.port; });
+        html = "<div class='kind'>" + esc(sw ? sw.role.charAt(0).toUpperCase() + sw.role.slice(1) : "Switch") + "</div><h2>" + esc(n.name) + "</h2><dl class='facts'>" +
+          fact("Power", on ? "On" : "Off") +
+          fact("Controller link", sw ? (sw.connected ? stateHtml(["up", "Connected " + dur(sw.connected_for), "▲"]) : stateHtml(["down", "Disconnected", "▼"])) : stateHtml(["wait", "Not seen yet", "○"])) +
+          fact("Datapath ID", "<span class='mono'>" + esc(sw ? sw.dpid : n.dpid) + "</span>") +
+          fact("Packet-ins", sw ? fmt(sw.packet_in) : "–") + fact("Rules installed", sw ? fmt(sw.flow_mods) : "–") +
+          fact("MACs learned", sw ? sw.macs_learned : "–") + "</dl>" +
+          "<h3>Ports</h3><ul class='ports'>" + ports.map(function (p) {
+            return "<li><span><span class='mono'>port " + p.port + "</span> to <span class='host'>" + esc(p.peer) + "</span></span>" +
+              (p.up ? "<span class='state up'>▲ up</span>" : "<span class='state down'>▼ down</span>") + "</li>";
+          }).join("") + "</ul>";
+        key = "sw|" + n.name + "|" + on;
+        acts = "<div class='row'><button class='" + (on ? "danger" : "primary") + "' data-act='power' data-on='" + !on + "'>" + (on ? "Switch off " + esc(n.name) : "Switch on " + esc(n.name)) + "</button></div>" +
+          "<p class='hint'>Switching off stops the switch: its rules are lost and it disconnects from the controller. Switching on reconnects it with an empty flow table.</p>";
+      } else {
+        html = "<div class='kind'>Linux router</div><h2>" + esc(n.name) + "</h2><dl class='facts'>" +
+          fact("Power", on ? "On" : "Off") +
+          (n.ips || []).map(function (ip, i) { return fact("Interface " + i, "<span class='mono'>" + esc(ip) + "</span>"); }).join("") + "</dl>" +
+          "<p class='hint'>Routes between the two campuses and the data center. Every client request crosses it.</p>";
+        key = "rtr|" + on;
+        acts = "<div class='row'><button class='" + (on ? "danger" : "primary") + "' data-act='power' data-on='" + !on + "'>" + (on ? "Switch off router" : "Switch on router") + "</button></div>";
+      }
+    }
+    if (key !== S.actKey) {
+      var keepN = $("in-n"), keepC = $("in-c");
+      if (keepN) S.trForm.n = keepN.value; if (keepC) S.trForm.c = keepC.value;
+      box.innerHTML = "<div id='insp-facts'></div><div class='actions' id='insp-acts'>" + acts + "</div>";
+      S.actKey = key;
+      wireActions();
+    }
+    $("insp-facts").innerHTML = html;
+  }
+
+  function wireActions() {
+    Array.prototype.forEach.call(document.querySelectorAll("#insp-acts button"), function (b) {
+      b.onclick = function () {
+        var sel = S.sel, a = b.getAttribute("data-act");
+        b.disabled = true;
+        var done = function () { b.disabled = false; S.actKey = ""; };
+        if (a === "cable") {
+          var l = linkById(sel.id);
+          netPost("/api/link", {a: l.a, b: l.b, up: b.getAttribute("data-up") === "true"}).then(done);
+        } else if (a === "power") {
+          netPost("/api/power", {node: sel.id, on: b.getAttribute("data-on") === "true"}).then(done);
+        } else if (a === "web") {
+          netPost("/api/web", {server: sel.id, on: b.getAttribute("data-on") === "true"}).then(done);
+        } else if (a === "traffic") {
+          S.trForm.n = $("in-n").value; S.trForm.c = $("in-c").value;
+          netPost("/api/traffic", {clients: [sel.id], mode: b.getAttribute("data-mode"), requests: +S.trForm.n, concurrency: +S.trForm.c}).then(done);
+        } else if (a === "traffic-stop") {
+          netPost("/api/traffic", {clients: [sel.id], stop: true}).then(done);
+        }
+      };
+    });
+  }
+
+  // ---------------- figures ----------------
+  function renderFigures() {
+    var st = S.stats; if (!st || !st.servers) { $("figures").innerHTML = ""; return; }
+    var healthy = st.servers.filter(function (s) { return s.alive; }).length;
+    var lastSec = st.history.length ? st.history[st.history.length - 1][1].reduce(function (a, b) { return a + b; }, 0) : 0;
+    var active = st.servers.reduce(function (a, s) { return a + s.active; }, 0);
+    var recent10 = st.history.slice(-10), sums = st.servers.map(function (_, i) { return recent10.reduce(function (a, r) { return a + r[1][i]; }, 0); });
+    var fair = jain(st.servers.filter(function (s) { return s.alive; }).map(function (s) { return sums[st.servers.indexOf(s)] / (s.weight || 1); }));
+    var swOn = (st.switches || []).filter(function (s) { return s.connected; }).length;
+    var items = [
+      [lastSec, "new connections in the last second"], [fmt(st.decisions), st.policy === "single" ? "connections, load balancing OFF" : "connections handled"],
+      [fmt(active), "active flow rules on s1"], [healthy + " of " + st.servers.length, "servers healthy"],
+      [swOn + " of " + (S.topo ? S.topo.nodes.filter(function (n) { return n.kind === "switch"; }).length : (st.switches || []).length), "switches connected"],
+      [fair == null ? "–" : fair.toFixed(2), "fairness, last 10 s (1.00 is even, " + (healthy ? (1 / healthy).toFixed(2) : "–") + " is one server)"]
+    ];
+    $("figures").innerHTML = items.map(function (it) { return "<li><b>" + it[0] + "</b><span>" + it[1] + "</span></li>"; }).join("");
+  }
+
+  // ---------------- chart ----------------
+  var chartBox = $("chart"), tip = $("tip"), hoverAt = null;
+  function renderChart() {
+    var st = S.stats, old = chartBox.querySelector("svg"); if (old) old.remove();
+    if (!st || !st.history) return;
+    var W = Math.max(280, chartBox.clientWidth - 28), H = 200, m = {l: 40, r: 10, t: 10, b: 24};
+    var svg = el("svg", {width: W, height: H, viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "New connections per second"});
+    chartBox.insertBefore(svg, tip);
+    var rows = st.history, n = 120, tot = rows.map(function (r) { return r[1].reduce(function (a, b) { return a + b; }, 0); });
+    var maxY = Math.max(5, Math.max.apply(null, tot.concat([0])));
+    var step = Math.pow(10, Math.floor(Math.log10(maxY))), nice = [1, 2, 5, 10].map(function (k) { return k * step; }).filter(function (v) { return maxY / v <= 5; })[0] || step * 10;
+    var topV = Math.ceil(maxY / nice) * nice;
+    var x = function (i) { return m.l + (W - m.l - m.r) * (n - rows.length + i) / (n - 1); };
+    var y = function (v) { return m.t + (H - m.t - m.b) * (1 - v / topV); };
+    for (var v = 0; v <= topV; v += nice) {
+      el("line", {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), "class": v === 0 ? "baseline" : "gridline"}, svg);
+      txt(svg, m.l - 8, y(v) + 4, v, "axis", {"text-anchor": "end"});
+    }
+    (W < 520 ? [120, 60, 0] : [120, 90, 60, 30, 0]).forEach(function (s) {
+      var xx = m.l + (W - m.l - m.r) * (n - 1 - s) / (n - 1);
+      txt(svg, xx, H - 5, s === 0 ? "now" : s + " s ago", "axis", {"text-anchor": s === 120 ? "start" : s === 0 ? "end" : "middle"});
+    });
+    if (!rows.length) return;
+    // shade each stretch by policy: red = single path, blue = load balancing
+    var runs = [], k0 = 0;
+    for (var k = 1; k <= rows.length; k++) {
+      if (k === rows.length || (rows[k][2] === "single") !== (rows[k0][2] === "single")) { runs.push([k0, k - 1, rows[k0][2]]); k0 = k; }
+    }
+    var half = (W - m.l - m.r) / (n - 1) / 2;
+    runs.forEach(function (r, j) {
+      var x0 = Math.max(m.l, x(r[0]) - half), x1 = Math.min(W - m.r, x(r[1]) + half), off = r[2] === "single";
+      el("rect", {x: x0, y: m.t, width: Math.max(0, x1 - x0), height: H - m.t - m.b, "class": off ? "band-off" : "band-on"}, svg);
+      var wide = x1 - x0 > 230, label = off ? (wide ? "Load balancing OFF: one path" : "LB OFF") : (wide ? "Load balancing ON: " + (POLICY[r[2]] || [r[2]])[0].toLowerCase() : "LB ON");
+      if (x1 - x0 > 52) txt(svg, x0 + 6, m.t + 14, label, "band-label", {fill: off ? "var(--bad-text)" : "var(--flow)"});
+      if (j > 0) el("line", {x1: x0, x2: x0, y1: m.t, y2: H - m.b, "class": "switch-mark"}, svg);
+    });
+    var line = tot.map(function (v, i) { return (i ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); }).join("");
+    el("path", {d: line + "L" + x(rows.length - 1) + "," + y(0) + "L" + x(0) + "," + y(0) + "Z", fill: "var(--flow-soft)"}, svg);
+    el("path", {d: line, fill: "none", stroke: "var(--flow)", "stroke-width": 2, "stroke-linejoin": "round"}, svg);
+    var guide = el("line", {y1: m.t, y2: H - m.b, stroke: "var(--ink)", opacity: 0}, svg);
+    var mark = el("circle", {r: 4, fill: "var(--flow)", stroke: "var(--panel)", "stroke-width": 2, opacity: 0}, svg);
+    var hit = el("rect", {x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent"}, svg);
+    function show(ev) {
+      var r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+      var i = Math.max(0, Math.min(rows.length - 1, Math.round((px - m.l) / ((W - m.l - m.r) / (n - 1))) - (n - rows.length)));
+      guide.setAttribute("x1", x(i)); guide.setAttribute("x2", x(i)); guide.setAttribute("opacity", .35);
+      mark.setAttribute("cx", x(i)); mark.setAttribute("cy", y(tot[i])); mark.setAttribute("opacity", 1);
+      var parts = st.servers.map(function (s, k) { return rows[i][1][k] ? nameByIp(s.ip) + " " + rows[i][1][k] : null; }).filter(Boolean);
+      tip.innerHTML = "<b>" + tot[i] + " new connections</b> at " + clock(rows[i][0]) + " <span style='opacity:.7'>(" + esc((POLICY[rows[i][2]] || [rows[i][2] || ""])[0]) + ")</span><br>" + (parts.length ? esc(parts.join(", ")) : "none");
+      tip.style.opacity = 1;
+      tip.style.left = Math.min(x(i) * r.width / W + 16, chartBox.clientWidth - tip.offsetWidth - 8) + "px"; tip.style.top = "12px";
+    }
+    hit.addEventListener("mousemove", function (ev) { hoverAt = {clientX: ev.clientX}; show(hoverAt); });
+    hit.addEventListener("mouseleave", function () { hoverAt = null; tip.style.opacity = 0; guide.setAttribute("opacity", 0); mark.setAttribute("opacity", 0); });
+    if (hoverAt) show(hoverAt);
+  }
+
+  // ---------------- tables ----------------
+  function spark(series, maxV) {
+    var w = 100, h = 24, n = 120;
+    if (!series.length) return "<span class='small'>no data</span>";
+    var pts = series.map(function (v, i) { return [(w * (n - series.length + i) / (n - 1)).toFixed(1), (h - 2 - (h - 4) * v / maxV).toFixed(1)]; });
+    var line = pts.map(function (p, i) { return (i ? "L" : "M") + p[0] + "," + p[1]; }).join("");
+    return "<svg class='spark' width='" + w + "' height='" + h + "' aria-hidden='true'><path class='area' d='" + line + "L" + pts[pts.length - 1][0] + "," + (h - 2) + "L" + pts[0][0] + "," + (h - 2) + "Z'/><path d='" + line + "'/></svg>";
+  }
+  function renderServers() {
+    var st = S.stats; if (!st || !st.servers) { $("servers").innerHTML = "<tr><td colspan='10' class='empty'>Waiting for the core switch to connect to the controller.</td></tr>"; return; }
+    var total = st.decisions || 0;
+    var liveW = st.servers.reduce(function (a, s) { return a + (s.alive ? s.weight : 0); }, 0) || 1;
+    var maxA = Math.max(1, Math.max.apply(null, st.servers.map(function (s) { return s.active; })));
+    var per = st.servers.map(function (_, i) { return st.history.map(function (r) { return r[1][i]; }); });
+    var maxS = Math.max(1, Math.max.apply(null, per.map(function (p) { return Math.max.apply(null, p.concat([0])); })));
+    $("servers").innerHTML = st.servers.map(function (s, i) {
+      var h = health(s), name = nameByIp(s.ip), node = nodeByName(name);
+      var first = st.servers.filter(function (x) { return x.alive; })[0];
+      var share = total ? s.total / total : 0, aim = st.policy === "single" ? (s === first ? 1 : 0) : s.alive ? s.weight / liveW : 0;
+      var lk = node ? linkBetween(name, node.switch) : null, rp = lk ? (lk.a === node.switch ? lk.a_port : lk.b_port) : null;
+      var where = node ? (S.topo.groups[node.group] || node.group) + ", " + node.switch + " port " + (rp != null ? rp : "–") : "core port " + (s.port != null ? s.port : "–");
+      return "<tr class='click " + (h[0] === "down" ? "down" : h[0] === "warn" ? "warn" : "") + "' data-node='" + esc(name) + "'>" +
+        "<td>" + stateHtml(h) + (s.changed != null ? "<div class='small'>for " + dur(s.changed) + "</div>" : "") + "</td>" +
+        "<td><span class='host'>" + esc(name) + "</span> <span class='small mono'>" + esc(s.ip) + "</span><div class='small mono'>" + esc(s.mac || "MAC not learned") + "</div></td>" +
+        "<td>" + esc(where) + "</td><td class='num'>" + s.weight + "</td>" +
+        "<td><span class='meter'><i style='width:" + (100 * s.active / maxA) + "%'></i></span>" + s.active + "</td>" +
+        "<td class='num'>" + fmt(s.total) + "</td>" +
+        "<td><span class='meter'><i style='width:" + (100 * share) + "%'></i><s style='left:calc(" + (100 * aim) + "% - 1px)'></s></span>" + Math.round(100 * share) + "%<span class='small'> aim " + Math.round(100 * aim) + "%</span></td>" +
+        "<td>" + spark(per[i], maxS) + "</td><td class='num'>" + s.down_count + "</td><td class='num'>" + ago(s.web_check) + "</td></tr>";
+    }).join("");
+    Array.prototype.forEach.call(document.querySelectorAll("#servers tr.click"), function (tr) {
+      tr.onclick = function () { select({type: "node", id: tr.getAttribute("data-node")}); window.scrollTo({top: 0, behavior: reduceMotion ? "auto" : "smooth"}); };
+    });
+  }
+  function renderSwitches() {
+    var st = S.stats || {}, rows = [], seen = {};
+    var topoSw = S.topo ? S.topo.nodes.filter(function (n) { return n.kind === "switch"; }) : [];
+    topoSw.forEach(function (n) { var s = swStats(n.dpid); if (s) seen[s.dpid_int] = 1; rows.push({name: n.name, node: n, s: s}); });
+    (st.switches || []).forEach(function (s) { if (!seen[s.dpid_int]) rows.push({name: "–", node: null, s: s}); });
+    $("switches").innerHTML = rows.length ? rows.map(function (r) {
+      var s = r.s, on = !r.node || r.node.power !== false;
+      var ctl = !on ? stateHtml(["down", "Switched off", "●"]) : !s ? stateHtml(["wait", "Not seen", "○"]) :
+        s.connected ? stateHtml(["up", "Connected " + dur(s.connected_for), "▲"]) : stateHtml(["down", "Disconnected", "▼"]);
+      var up = s ? s.ports.filter(function (p) { return p.up; }).length + " of " + s.ports.length : "–";
+      return "<tr class='click" + (!on || (s && !s.connected) ? " down" : "") + "' data-node='" + esc(r.name) + "'><td><span class='host'>" + esc(r.name) + "</span></td>" +
+        "<td>" + esc(s ? s.role : (r.node ? (S.topo.groups[r.node.group] || "") : "")) + "</td><td class='mono'>" + esc(s ? s.dpid : r.node.dpid) + "</td>" +
+        "<td>" + ctl + "</td><td class='num'>" + up + "</td><td class='num'>" + (s ? fmt(s.packet_in) : "–") + "</td>" +
+        "<td class='num'>" + (s ? fmt(s.flow_mods) : "–") + "</td><td class='num'>" + (s ? s.macs_learned : "–") + "</td></tr>";
+    }).join("") : "<tr><td colspan='8' class='empty'>No switch has connected yet.</td></tr>";
+    Array.prototype.forEach.call(document.querySelectorAll("#switches tr.click"), function (tr) {
+      tr.onclick = function () { var n = tr.getAttribute("data-node"); if (nodeByName(n)) { select({type: "node", id: n}); window.scrollTo({top: 0, behavior: reduceMotion ? "auto" : "smooth"}); } };
+    });
+  }
+  function renderRecent() {
+    var st = S.stats, rows = st && st.recent ? st.recent.slice().reverse() : [];
+    $("recent").innerHTML = rows.length ? rows.map(function (r) {
+      return "<tr><td>" + clock(r[0]) + "</td><td><span class='host'>" + esc(nameByIp(r[1])) + "</span> <span class='small mono'>" + esc(r[1]) + "</span></td>" +
+        "<td class='num mono'>" + r[2] + "</td><td><span class='host'>" + esc(nameByIp(r[3])) + "</span> <span class='small mono'>" + esc(r[3]) + "</span></td></tr>";
+    }).join("") : "<tr><td colspan='4' class='empty'>No connections yet. Start traffic from the panel above, or click a laptop.</td></tr>";
+  }
+  function renderEvents() {
+    var st = S.stats, rows = st && st.events ? st.events.slice().reverse() : [];
+    var icon = {up: "▲", down: "▼", "switch": "⇄", link: "—", settings: "⚙"};
+    var label = {up: "Healthy", down: "Problem", "switch": "Switch", link: "Port", settings: "Settings"};
+    $("events").innerHTML = rows.length ? rows.map(function (e) {
+      return "<li><span class='muted'>" + clock(e[0]) + "</span><span class='ic " + e[1] + "' title='" + (label[e[1]] || e[1]) + "'>" + (icon[e[1]] || "•") +
+        "</span><span><b>" + (label[e[1]] || e[1]) + ":</b> " + esc(e[2]) + "</span></li>";
+    }).join("") : "<li class='empty'>Nothing has happened yet.</li>";
+  }
+
+  // ---------------- settings form ----------------
+  var form = $("settings");
+  function fillSettings(force) {
+    var st = S.stats; if (!st || !st.settings || (S.dirty && !force)) return;
+    var c = st.settings, w = $("st-weights");
+    $("st-policy").value = c.policy; $("st-idle").value = c.idle_timeout; $("st-hard").value = c.hard_timeout; $("st-probe").value = c.probe_interval;
+    var names = (st.servers || []).map(function (s) { return nameByIp(s.ip); });
+    if (w.children.length !== c.weights.length || w.getAttribute("data-names") !== names.join(",")) {
+      w.innerHTML = c.weights.map(function (_, i) { return "<label>" + esc(names[i] || "server " + (i + 1)) + "<input type='number' min='1' max='20' data-i='" + i + "'></label>"; }).join("");
+      w.setAttribute("data-names", names.join(","));
+    }
+    Array.prototype.forEach.call(w.querySelectorAll("input"), function (inp) { inp.value = c.weights[+inp.getAttribute("data-i")]; });
+    S.dirty = false; updateSettingsNote();
+  }
+  function updateSettingsNote() {
+    $("st-note").textContent = S.dirty ? "You have changes that are not applied yet." : "Weights only matter for weighted round robin.";
+    $("st-apply").disabled = !S.dirty;
+  }
+  form.addEventListener("input", function () { S.dirty = true; updateSettingsNote(); });
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var body = {policy: $("st-policy").value, idle_timeout: +$("st-idle").value, hard_timeout: +$("st-hard").value,
+                probe_interval: +$("st-probe").value,
+                weights: Array.prototype.map.call($("st-weights").querySelectorAll("input"), function (i) { return +i.value; })};
+    $("st-apply").disabled = true;
+    post("/api/settings", body).then(function () { toast("Settings applied: " + POLICY[body.policy][0].toLowerCase()); S.dirty = false; setTimeout(function () { refresh().then(function () { fillSettings(true); }); }, 400); })
+      .catch(function (err) { toast(err.message, true); $("st-apply").disabled = false; });
+  });
+  $("st-revert").onclick = function () { S.dirty = false; fillSettings(true); };
+  $("st-reset").onclick = function () { post("/api/reset", {}).then(function () { toast("Counters reset"); clearPhases(); refresh(); }).catch(function (err) { toast(err.message, true); }); };
+
+  // ---------------- traffic panel ----------------
+  function targetClients() {
+    var v = $("tr-target").value;
+    if (v === "all") return "all";
+    return S.topo ? S.topo.nodes.filter(function (n) { return n.kind === "client" && n.group === v; }).map(function (n) { return n.name; }) : [];
+  }
+  $("tr-start").onclick = function () {
+    netPost("/api/traffic", {clients: targetClients(), mode: $("tr-mode").value, requests: +$("tr-n").value, concurrency: +$("tr-c").value});
+  };
+  $("tr-stop").onclick = function () { netPost("/api/traffic", {clients: targetClients(), stop: true}); };
+  function renderTraffic() {
+    var clients = S.topo ? S.topo.nodes.filter(function (n) { return n.kind === "client"; }) : [];
+    var running = clients.filter(function (n) { return n.traffic && n.traffic.running; });
+    $("tr-note").textContent = !S.netOk ? "Network control is offline." : running.length ? running.length + " of " + clients.length + " clients sending" : "No traffic running.";
+    $("tr-chips").innerHTML = clients.map(function (n) {
+      var t = n.traffic, run = t && t.running;
+      var label = n.name + (run ? " sending" : t && t.rps != null ? " " + Math.round(t.rps) + " req/s" : "");
+      return "<span class='chip" + (run ? " run" : "") + "'>" + esc(label) + "</span>";
+    }).join("");
+  }
+
+  // ---------------- before / after comparison ----------------
+  function clearPhases() { S.phases = {off: [], on: [], offPolicy: null, onPolicy: null, lastT: S.phases.lastT}; }
+  function collectPhases() {
+    var st = S.stats; if (!st || !st.history) return;
+    st.history.forEach(function (r) {
+      if (r[0] <= S.phases.lastT) return;
+      S.phases.lastT = r[0];
+      var key = r[2] === "single" ? "off" : "on", acc = S.phases[key];
+      r[1].forEach(function (v, i) { acc[i] = (acc[i] || 0) + v; });
+      S.phases[key + "Policy"] = r[2];
+    });
+  }
+  function phaseHtml(key) {
+    var st = S.stats, acc = S.phases[key], names = st.servers.map(function (s) { return nameByIp(s.ip); });
+    var vals = st.servers.map(function (_, i) { return acc[i] || 0; }), total = vals.reduce(function (a, b) { return a + b; }, 0);
+    if (!total) return "<p class='small'>" + (key === "off" ? "No connections yet with load balancing off. Run the demo, or set the policy to single path and send traffic." :
+      "No connections yet with load balancing on.") + "</p>";
+    var W = 420, H = 150, m = {l: 6, r: 6, t: 16, b: 20}, bw = (W - m.l - m.r) / vals.length, max = Math.max.apply(null, vals);
+    var svg = "<svg viewBox='0 0 " + W + " " + H + "' role='img' aria-label='Connections per server " + (key === "off" ? "without" : "with") + " load balancing'>";
+    vals.forEach(function (v, i) {
+      var h = (H - m.t - m.b) * v / max, x = m.l + i * bw + bw * .15, w = bw * .7;
+      svg += "<rect class='bar-" + key + "' x='" + x.toFixed(1) + "' y='" + (H - m.b - h).toFixed(1) + "' width='" + w.toFixed(1) + "' height='" + Math.max(v ? 1 : 0, h).toFixed(1) + "' rx='2'><title>" + esc(names[i]) + ": " + v + "</title></rect>";
+      svg += "<text class='val' x='" + (x + w / 2).toFixed(1) + "' y='" + (H - m.b - h - 4).toFixed(1) + "' text-anchor='middle'>" + v + "</text>";
+      svg += "<text class='lbl' x='" + (x + w / 2).toFixed(1) + "' y='" + (H - 5) + "' text-anchor='middle'>" + esc(names[i]) + "</text>";
+    });
+    svg += "<line x1='" + m.l + "' x2='" + (W - m.r) + "' y1='" + (H - m.b) + "' y2='" + (H - m.b) + "' stroke='var(--cable)'/></svg>";
+    var used = vals.filter(function (v) { return v > 0; }).length, busiest = vals.indexOf(max), f = jain(vals.filter(function (_, i) { return st.servers[i].alive || vals[i]; }));
+    var racks = {}; vals.forEach(function (v, i) { if (v) { var nd = nodeByName(names[i]); racks[nd ? nd.switch : "?"] = 1; } });
+    return svg + "<dl><div><dt>Connections</dt><dd>" + fmt(total) + "</dd></div><div><dt>Servers used</dt><dd>" + used + " of " + vals.length + "</dd></div>" +
+      "<div><dt>Busiest, " + esc(names[busiest]) + "</dt><dd>" + Math.round(100 * max / total) + "%</dd></div><div><dt>Fairness</dt><dd>" + (f == null ? "–" : f.toFixed(2)) + "</dd></div></dl>" +
+      "<p class='small' style='margin:6px 0 0'>Path" + (Object.keys(racks).length > 1 ? "s" : "") + " used from core switch s1: " + esc(Object.keys(racks).sort().map(function (r) { return "s1 → " + r; }).join(", ")) + "</p>";
+  }
+  function renderPhases() {
+    if (!S.stats || !S.stats.servers) return;
+    $("ph-off").innerHTML = phaseHtml("off"); $("ph-on").innerHTML = phaseHtml("on");
+    $("ph-on-sub").textContent = S.phases.onPolicy ? "Policy: " + (POLICY[S.phases.onPolicy] || [S.phases.onPolicy])[0].toLowerCase() : "Any balancing policy";
+  }
+
+  // ---------------- one-click demo ----------------
+  function demoStep(n, note) {
+    Array.prototype.forEach.call(document.querySelectorAll("#dm-steps li"), function (li) {
+      var k = +li.getAttribute("data-step"); li.className = k < n ? "done" : k === n ? "now" : "";
+    });
+    if (note) $("dm-note").textContent = note;
+  }
+  function setPolicy(p) { return post("/api/settings", {policy: p}).then(function () { S.dirty = false; return refresh().then(function () { fillSettings(true); }); }); }
+  function demoEnd(msg, err) {
+    var d = S.demo; if (!d) return;
+    d.timers.forEach(clearTimeout); clearInterval(d.tick); S.demo = null;
+    $("dm-start").disabled = false; $("dm-stop").disabled = true;
+    post(NET_API + "/api/traffic", {clients: "all", stop: true}).catch(function () {});
+    if (err) toast(msg, true); else demoStep(6, msg);
+  }
+  $("dm-start").onclick = function () {
+    if (!S.netOk) { toast("Network control is offline. Start topo.py first.", true); return; }
+    var off = Math.max(5, +$("dm-off").value || 25), on = Math.max(5, +$("dm-on").value || 25), pol = $("dm-policy").value;
+    var d = S.demo = {timers: [], tick: null, t0: 0};
+    $("dm-start").disabled = true; $("dm-stop").disabled = false;
+    demoStep(1, "Resetting counters…");
+    post("/api/reset", {}).then(function () { clearPhases(); demoStep(2, "Switching load balancing off…"); return setPolicy("single"); })
+      .then(function () {
+        demoStep(3, "Starting traffic from all 12 clients…");
+        // steady mode is 5 requests per second per client; ask for enough to cover both phases
+        return post(NET_API + "/api/traffic", {clients: "all", mode: "steady", requests: (off + on + 5) * 5, concurrency: 1});
+      })
+      .then(function () {
+        if (S.demo !== d) return;
+        d.t0 = Date.now();
+        d.tick = setInterval(function () {
+          var s = Math.round((Date.now() - d.t0) / 1000);
+          $("dm-note").textContent = s < off ? "Single path: every connection goes to one server. Load balancing switches on in " + (off - s) + " s."
+            : "Load balancing on (" + POLICY[pol][0].toLowerCase() + "). Traffic stops in " + Math.max(0, off + on - s) + " s.";
+        }, 500);
+        d.timers.push(setTimeout(function () {
+          demoStep(4); setPolicy(pol).then(function () { toast("Load balancing switched on: " + POLICY[pol][0].toLowerCase()); })
+            .catch(function (e) { demoEnd(e.message, true); });
+        }, off * 1000));
+        d.timers.push(setTimeout(function () { demoEnd("Demo finished. Compare the two panels below: one busy server before, an even spread after."); }, (off + on) * 1000));
+        refresh();
+      })
+      .catch(function (e) { demoEnd(e.message === "Failed to fetch" ? "Network control is offline. Start topo.py first." : e.message, true); });
+  };
+  $("dm-stop").onclick = function () { demoEnd("Demo stopped."); };
+
+  // ---------------- header ----------------
+  function renderHeader() {
+    var st = S.stats, b = $("banner");
+    $("pill-ctl").innerHTML = "<span class='dot " + (S.ctlOk ? "" : "bad") + "'></span>" + (S.ctlOk ? "Controller up " + dur(st && st.controller_uptime) : "Controller unreachable");
+    $("pill-net").innerHTML = "<span class='dot " + (S.netOk ? "" : "warn") + "'></span>" + (S.netOk ? "Network control online" : "Network control offline");
+    if (!S.ctlOk) { b.className = "banner show"; b.textContent = "Can't reach the POX controller. Start POX with sdn_lb, then this page reconnects by itself."; }
+    else if (st && st.servers && !st.servers.some(function (s) { return s.alive; })) { b.className = "banner show"; b.textContent = "No server passes its health checks, so new connections to " + st.vip + " are dropped."; }
+    else b.className = "banner";
+    if (!st) return;
+    $("vip").textContent = st.vip;
+    if (st.servers) {
+      var p = POLICY[st.policy] || [st.policy, ""], live = st.servers.filter(function (s) { return s.alive; }).length;
+      $("lede").textContent = "Virtual IP served by " + live + " of " + st.servers.length + " servers using " + p[0].toLowerCase() + ": " + p[1] + ".";
+    } else $("lede").textContent = "POX is running. Waiting for the core switch s1 to connect.";
+    $("footer").textContent = "Controller data from /stats every second, network data from port 8081. Last update " + clock(st.now) + ".";
+  }
+
+  // ---------------- main loop ----------------
+  function render() {
+    renderHeader(); renderMap(); renderInspector(); renderFigures(); renderChart();
+    renderServers(); renderSwitches(); renderRecent(); renderEvents(); renderTraffic(); renderPhases(); fillSettings(false);
+  }
+  function refresh() {
+    var a = fetch("/stats", {cache: "no-store"}).then(function (r) { return r.json(); });
+    var b = fetch(NET_API + "/api/topology", {cache: "no-store"}).then(function (r) { return r.json(); });
+    return Promise.allSettled([a, b]).then(function (res) {
+      S.ctlOk = res[0].status === "fulfilled";
+      if (S.ctlOk) { S.stats = res[0].value; collectPhases(); }
+      S.netOk = res[1].status === "fulfilled";
+      if (S.netOk) S.topo = res[1].value;
+      if (!S.paused) render();
+    });
+  }
+  window.addEventListener("resize", function () { if (!S.paused) renderChart(); });
+  setInterval(refresh, 1000); refresh();
+})();
+</script>
+</body>
+</html>

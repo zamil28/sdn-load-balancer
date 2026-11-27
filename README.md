@@ -37,6 +37,8 @@ Tested on Kali Linux 2026.1 (VirtualBox, 2 CPUs, 3.8 GB RAM) with Python 3.14, P
 
 ## How to run
 
+### Linux
+
 1. Put the project in `~/sdn-lb` and POX in `~/pox`, then copy the controller files into POX:
 
    ```bash
@@ -68,6 +70,56 @@ Tested on Kali Linux 2026.1 (VirtualBox, 2 CPUs, 3.8 GB RAM) with Python 3.14, P
    ```
 
 Policies: `single` (no balancing), `rr`, `random`, `leastconn`, `wrr` (with `--weights=3,1,1,1,1,1,1,1`).
+
+### Windows with VirtualBox
+
+Mininet, Open vSwitch, and POX run inside a Linux guest. Use PowerShell to connect to the guest and open the dashboard in your Windows browser. The Windows setup was tested with the Mininet 2.3.0 image for Ubuntu 20.04.1, POX 0.7.0, Python 3.8, and Open vSwitch 2.13.1.
+
+1. Install VirtualBox for Windows. From the Mininet 2.3.0 release, download the Ubuntu 20.04.1 64-bit OVF archive, extract it, and choose **File → Import Appliance** in VirtualBox to import the `.ovf` file. [VirtualBox downloads](https://www.oracle.com/virtualization/technologies/vm/downloads/virtualbox-downloads.html) · [Mininet 2.3.0 release](https://github.com/mininet/mininet/releases/tag/2.3.0)
+
+2. With the VM powered off, open **Settings → Network → Adapter 1**. Set the attachment to **NAT**, open **Port Forwarding**, and add these rules. Leave **Guest IP** blank and use `127.0.0.1` as the host IP to keep access local to Windows. [VirtualBox NAT port forwarding](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/networkingdetails.html#natforward)
+
+   | Name | Protocol | Host IP | Host port | Guest port |
+   | --- | --- | --- | --- | --- |
+   | SSH | TCP | `127.0.0.1` | `2222` | `22` |
+   | Dashboard | TCP | `127.0.0.1` | `8080` | `8080` |
+   | Topology API | TCP | `127.0.0.1` | `8081` | `8081` |
+
+3. Start the VM. Open two PowerShell terminals and connect from each. The stock Mininet image uses `mininet` for both the username and password. If `ssh` is unavailable, install the Windows OpenSSH Client. [Mininet login](https://mininet.org/vm-setup-notes/) · [Windows OpenSSH setup](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse)
+
+   ```powershell
+   ssh -p 2222 mininet@127.0.0.1
+   ```
+
+4. In the first SSH session, install the lab tools and start Open vSwitch. Use the POX checkout that comes with the Mininet image. If `~/pox` is missing, clone the `gar-experimental` branch.
+
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y git curl apache2-utils iperf
+   sudo systemctl start openvswitch-switch
+   ```
+
+   ```bash
+   git clone --branch gar-experimental https://github.com/noxrepo/pox.git ~/pox
+   ```
+
+5. Follow step 1 under [Linux](#linux) inside the guest. Skip the clone if `~/sdn-lb` already contains the project. To use edits from your Windows checkout, run this from the project directory in a separate PowerShell terminal, then repeat the `cp` command from step 1 inside the guest.
+
+   ```powershell
+   scp -P 2222 .\sdn_lb.py .\dashboard.html .\topo.py mininet@127.0.0.1:sdn-lb/
+   ```
+
+   Start POX in the first SSH session and Mininet in the second using Linux steps 2 and 3. Keep both sessions open.
+
+6. Open [the dashboard](http://127.0.0.1:8080/) on Windows. Look for **Network control online** and five connected switches. If the dashboard opens but the map is offline, check that `topo.py` is still running and that the `8081` forwarding rule is present.
+
+   Run this at the `mininet>` prompt in the second SSH session. With eight healthy backends, round robin active, and other client traffic stopped, the eight requests should return one response from each server. The VIP is reachable from the simulated clients inside Mininet.
+
+   ```text
+   c1 bash -c 'for i in $(seq 8); do curl -fsS --max-time 5 http://10.0.0.100/ || exit; done'
+   ```
+
+   To stop the lab, type `exit` at the `mininet>` prompt, then press `Ctrl+C` in the POX terminal.
 
 ## Demonstration and tests
 

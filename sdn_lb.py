@@ -28,8 +28,10 @@ import collections
 import json
 import os
 import random
+import subprocess
 import threading
 import time
+from http.client import HTTPConnection, HTTPException
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from pox.core import core
@@ -53,7 +55,7 @@ PROBE_PORT = 61000    # health probes use source ports 61000, 61001, ...
 POLICIES = ("single", "rr", "random", "leastconn", "wrr")
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-STATE = {"json": "{}"}   # latest stats snapshot, served by the dashboard
+STATE = {"json": "{}", "can_shutdown_vm": False}   # dashboard snapshot and capabilities
 SWITCHES = {}            # dpid -> LearningSwitch / LoadBalancer, one per switch for good
 SETTINGS = {}            # current controller settings, filled by launch()
 
@@ -533,6 +535,7 @@ def snapshot():
   now = time.time()
   lb = balancer()
   data = {"now": now, "controller_uptime": int(now - STARTED), "lb_dpid": dpid_to_str(SETTINGS["lb_dpid"]),
+          "can_shutdown_vm": STATE["can_shutdown_vm"],
           "switches": [sw.info(now) for _, sw in sorted(SWITCHES.items())],
           "events": [[round(t, 1), k, x] for t, k, x in EVENTS],
           "settings": {k: SETTINGS[k] for k in ("policy", "weights", "idle_timeout",
@@ -603,6 +606,31 @@ FALLBACK_PAGE = b"""<!doctype html><meta charset="utf-8"><title>SDN LB</title>
 <p>Copy dashboard.html next to sdn_lb.py in pox/ext/ and reload. Raw data: <a href="/stats">/stats</a></p>"""
 
 
+def is_virtualbox_guest():
+  try:
+    with open("/sys/class/dmi/id/product_name", encoding="ascii") as f:
+      return f.read().strip() == "VirtualBox"
+  except (OSError, UnicodeError):
+    return False
+
+
+def stop_topology():
+  conn = HTTPConnection("127.0.0.1", 8081, timeout=15)
+  try:
+    try:
+      conn.connect()
+    except ConnectionRefusedError:
+      return None   # topology API is already offline
+    conn.request("POST", "/_local/stop")
+    response = conn.getresponse()
+    response.read()
+    return response.status
+  except (OSError, HTTPException):
+    return 503
+  finally:
+    conn.close()
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
   def _send(self, code, body, ctype):
     self.send_response(code)
@@ -626,6 +654,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
     self._send(200, page, "text/html; charset=utf-8")
 
   def do_POST(self):
+    if self.path in ("/api/stop-mininet", "/api/shutdown-vm"):
+      return self.stop_lab(shutdown_vm=self.path == "/api/shutdown-vm")
     try:
       length = int(self.headers.get("Content-Length") or 0)
       raw = json.loads(self.rfile.read(length) or b"{}")
@@ -642,6 +672,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
       return self._json(200, {"ok": True})
     self._json(404, {"ok": False, "error": "Unknown action"})
 
+  def stop_lab(self, shutdown_vm):
+    host = self.headers.get("Host", "")
+    # VirtualBox NAT presents a forwarded Windows localhost request as 10.0.2.2.
+    if (self.client_address[0] not in ("127.0.0.1", "10.0.2.2")
+        or host.split(":", 1)[0] not in ("127.0.0.1", "localhost")
+        or self.headers.get("Origin") != "http://" + host):
+      return self._json(403, {"ok": False, "error": "Open the dashboard on localhost to stop the lab"})
+    if shutdown_vm and not STATE["can_shutdown_vm"]:
+      return self._json(403, {"ok": False, "error": "Dashboard shutdown is disabled for this machine"})
+
+    status = stop_topology()
+    if status == 409:
+      return self._json(409, {"ok": False, "error": "Stop this Mininet run from its terminal"})
+    if status not in (None, 200):
+      return self._json(503, {"ok": False, "error": "Mininet cleanup could not be confirmed"})
+    if not shutdown_vm:
+      if status is None:
+        return self._json(503, {"ok": False, "error": "Mininet is already offline"})
+      return self._json(202, {"ok": True})
+
+    # Give the browser time to receive the result before systemd stops the guest.
+    try:
+      result = subprocess.run(["sudo", "-n", "systemd-run", "--unit=sdn-lab-poweroff",
+                               "--on-active=3s", "--timer-property=AccuracySec=100ms",
+                               "/bin/systemctl", "poweroff"], capture_output=True, text=True, timeout=5)
+      if result.returncode == 0:
+        return self._json(202, {"ok": True})
+      log.warning("VM shutdown could not be scheduled: %s", result.stderr.strip())
+    except (OSError, subprocess.TimeoutExpired) as e:
+      log.warning("VM shutdown could not be scheduled: %s", e)
+    return self._json(503, {"ok": False, "error": "Could not schedule VM shutdown"})
+
   def log_message(self, *args):
     pass
 
@@ -656,7 +718,8 @@ def start_dashboard(port):
 
 def launch(ip="10.0.0.100", servers=",".join("10.0.0.%d" % i for i in range(1, 9)),
            policy="rr", weights=None, idle_timeout=10, hard_timeout=0,
-           probe_interval=2, lb_dpid=1, dashboard_port=8080, log_file="logs/decisions.csv"):
+           probe_interval=2, lb_dpid=1, dashboard_port=8080, log_file="logs/decisions.csv",
+           allow_vm_shutdown=False):
   servers = servers.replace(",", " ").split()
   if policy not in POLICIES:
     raise RuntimeError("policy must be one of %s" % (POLICIES,))
@@ -666,6 +729,7 @@ def launch(ip="10.0.0.100", servers=",".join("10.0.0.%d" % i for i in range(1, 9
   SETTINGS.update(vip=ip, servers=servers, policy=policy, weights=weights,
                   idle_timeout=int(idle_timeout), hard_timeout=int(hard_timeout),
                   probe_interval=float(probe_interval), lb_dpid=int(lb_dpid))
+  STATE["can_shutdown_vm"] = str(allow_vm_shutdown).lower() == "true" and is_virtualbox_guest()
 
   def switch_up(ev):
     sw = SWITCHES.get(ev.dpid)

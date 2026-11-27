@@ -20,6 +20,8 @@ Team: **Zamil Ali (23K-2048)** and **Ayaan Irfan (23K-2084)**.
 
 There is also a live web dashboard served by POX at http://127.0.0.1:8080. It shows the network map, server health and load, and the latest decisions. From the dashboard you can power devices on and off, unplug cables, stop web services, start client traffic and change the controller settings.
 
+When you run `topo.py` directly, **Stop Mininet** on the localhost dashboard shuts down the simulated network and leaves POX serving the dashboard.
+
 ## Network
 
 | Part | Devices | Addresses |
@@ -109,7 +111,7 @@ Mininet, Open vSwitch, and POX run inside a Linux guest. Use PowerShell to conne
    scp -P 2222 .\sdn_lb.py .\dashboard.html .\topo.py mininet@127.0.0.1:sdn-lb/
    ```
 
-   Start POX in the first SSH session and Mininet in the second using Linux steps 2 and 3. Keep both sessions open.
+   Start POX in the first SSH session and Mininet in the second using Linux steps 2 and 3. Append `--allow_vm_shutdown=true` to the POX command to enable **Shut down VM** on the localhost dashboard. This option is intended for a dedicated VirtualBox guest where the POX user can schedule a system shutdown without a sudo prompt. Keep both sessions open.
 
 6. Open [the dashboard](http://127.0.0.1:8080/) on Windows. Look for **Network control online** and five connected switches. If the dashboard opens but the map is offline, check that `topo.py` is still running and that the `8081` forwarding rule is present.
 
@@ -119,7 +121,7 @@ Mininet, Open vSwitch, and POX run inside a Linux guest. Use PowerShell to conne
    c1 bash -c 'for i in $(seq 8); do curl -fsS --max-time 5 http://10.0.0.100/ || exit; done'
    ```
 
-   To stop the lab, type `exit` at the `mininet>` prompt, then press `Ctrl+C` in the POX terminal.
+   To power off the entire lab, click **Shut down VM** and confirm. The dashboard goes offline after Mininet finishes cleaning up. VirtualBox should show **Powered Off**. If you want to review the run first, click **Stop Mininet** or type `exit` at the `mininet>` prompt. **Shut down VM** is still available afterward.
 
 ## Demonstration and tests
 

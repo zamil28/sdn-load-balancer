@@ -15,7 +15,10 @@ The dashboard controls this network through http://127.0.0.1:8081/api/...
 import json
 import os
 import re
+import signal
 import subprocess
+import sys
+import termios
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -280,7 +283,7 @@ def traffic_status(name):
 
 # ---------- HTTP API ----------
 
-def make_handler(net):
+def make_handler(net, request_stop=None):
   class Api(BaseHTTPRequestHandler):
     def _json(self, code, obj):
       body = json.dumps(obj).encode()
@@ -303,24 +306,49 @@ def make_handler(net):
       if self.path.startswith("/api/topology"):
         try:
           with LOCK:
-            return self._json(200, topology(net))
+            if self.server.stopping.is_set():
+              return self._json(503, {"ok": False, "error": "Network is shutting down"})
+            return self._json(200, dict(topology(net), can_stop=request_stop is not None))
         except Exception:     # the network is being stopped
           return self._json(503, {"ok": False, "error": "Network is shutting down"})
       self._json(404, {"ok": False, "error": "Unknown address"})
 
     def do_POST(self):
+      if self.path == "/_local/stop":
+        return self.stop_network()
       try:
         raw = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
       except ValueError:
         return self._json(400, {"ok": False, "error": "Body must be JSON"})
       try:
         with LOCK:
+          if self.server.stopping.is_set():
+            return self._json(503, {"ok": False, "error": "Network is shutting down"})
           msg = self.act(raw)
         self._json(200, {"ok": True, "message": msg})
       except ValueError as e:
         self._json(400, {"ok": False, "error": str(e)})
       except Exception as e:      # report, keep the network running
         self._json(500, {"ok": False, "error": "%s: %s" % (type(e).__name__, e)})
+
+    def stop_network(self):
+      # Only the dashboard's server-side loopback request may stop the lab.
+      if (self.client_address[0] != "127.0.0.1" or "Origin" in self.headers
+          or self.headers.get("Host") != "127.0.0.1:%s" % self.server.server_port):
+        return self._json(403, {"ok": False, "error": "Local controller access required"})
+      if request_stop is None:
+        return self._json(409, {"ok": False, "error": "This run must be stopped from its terminal"})
+      with LOCK:
+        self.server.stop_requested = True
+        if not self.server.stopping.is_set():
+          self.server.stopping.set()
+          request_stop()
+      try:
+        if self.server.cleanup_done.wait(12) and self.server.cleanup_succeeded:
+          return self._json(200, {"ok": True})
+        return self._json(503, {"ok": False, "error": "Mininet cleanup could not be confirmed"})
+      finally:
+        self.server.stop_replied.set()
 
     def act(self, raw):
       names = [n.name for n in net.hosts + net.switches]
@@ -372,23 +400,77 @@ def make_handler(net):
   return Api
 
 
-def start_api(net, port=API_PORT):
-  server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(net))
+def start_api(net, port=API_PORT, request_stop=None):
+  server = ThreadingHTTPServer(("0.0.0.0", port), make_handler(net, request_stop))
+  server.stopping = threading.Event()
+  server.stop_requested = False
+  server.stop_replied = threading.Event()
+  server.cleanup_done = threading.Event()
+  server.cleanup_succeeded = False
   threading.Thread(target=server.serve_forever, daemon=True).start()
   return server
 
 
-if __name__ == "__main__":
+class DashboardStop(BaseException):
+  "Interrupt the CLI so the main thread can shut the network down."
+
+
+def main():
   setLogLevel("info")
+  terminal = termios.tcgetattr(sys.stdin) if sys.stdin.isatty() else None
   net = build()
-  net.start()
-  start_servers(net)
-  start_api(net)
-  info("\nRouter r1, switches %s\n" % " ".join(n for n, _, _ in SWITCHES))
-  info("Servers srv1-srv8 (10.0.0.1-8), clients c1-c12, VIP %s\n" % VIP)
-  info("Network control for the dashboard on port %d\n" % API_PORT)
+  api = None
+  cli_active = False
+  cli_thread = threading.get_ident()
+
+  def stop_cli(_signum, _frame):
+    if cli_active:
+      raise DashboardStop
+
+  def request_stop():
+    # Wake the main thread even while the CLI is waiting for input.
+    signal.pthread_kill(cli_thread, signal.SIGUSR1)
+
+  signal.signal(signal.SIGUSR1, stop_cli)
   try:
-    CLI(net)
+    try:
+      net.start()
+      start_servers(net)
+      info("\nRouter r1, switches %s\n" % " ".join(n for n, _, _ in SWITCHES))
+      info("Servers srv1-srv8 (10.0.0.1-8), clients c1-c12, VIP %s\n" % VIP)
+      info("Network control for the dashboard on port %d\n" % API_PORT)
+      cli_active = True
+      api = start_api(net, request_stop=request_stop)
+      CLI(net)
+    finally:
+      cli_active = False
+  except DashboardStop:
+    info("\n*** Dashboard requested Mininet shutdown\n")
   finally:
-    stop_all()
-    net.stop()
+    if api is not None:
+      api.stopping.set()
+    try:
+      with LOCK:
+        for node in net.values():
+          if node.waiting:
+            node.sendInt()
+            node.waitOutput()
+        stop_all()
+        net.stop()
+      if api is not None:
+        api.cleanup_succeeded = True
+    finally:
+      try:
+        if terminal is not None:
+          termios.tcsetattr(sys.stdin, termios.TCSANOW, terminal)
+      finally:
+        if api is not None:
+          api.cleanup_done.set()
+          if api.stop_requested:
+            api.stop_replied.wait(2)
+          api.shutdown()
+          api.server_close()
+
+
+if __name__ == "__main__":
+  main()

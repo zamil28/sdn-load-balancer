@@ -310,7 +310,7 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="dashboard-view">
   <header class="top">
     <div>
       <h1 class="vip" id="vip">10.0.0.100</h1>
@@ -321,6 +321,8 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
       <span class="pill" id="pill-net"><span class="dot off"></span>Network control</span>
       <button id="pause" aria-pressed="false">Pause updates</button>
       <button id="theme">Dark theme</button>
+      <button type="button" class="danger" id="stop-mininet" disabled>Stop Mininet</button>
+      <button type="button" class="danger" id="shutdown-vm" hidden disabled>Shut down VM</button>
     </div>
   </header>
   <div class="banner" id="banner" role="alert"></div>
@@ -495,6 +497,10 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
 
   <footer id="footer">Controller data from /stats every second, network data from port 8081.</footer>
 </div>
+<main class="wrap" id="shutdown-view" hidden>
+  <h1 tabindex="-1" id="shutdown-title">VM shutdown scheduled</h1>
+  <p>The dashboard is going offline. Check for <strong>Powered Off</strong> in VirtualBox.</p>
+</main>
 <div id="toasts" aria-live="polite"></div>
 
 <script>
@@ -502,6 +508,7 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
   var NET_API = location.protocol + "//" + (location.hostname || "127.0.0.1") + ":8081";
+  var localDashboard = location.protocol === "http:" && (location.hostname === "127.0.0.1" || location.hostname === "localhost");
   var POLICY = {
     single: ["Single path (no load balancing)", "every new connection takes the same path to one server, the first healthy one"],
     rr: ["Round robin", "each new connection goes to the next healthy server in turn"],
@@ -511,7 +518,8 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
   };
   var S = { stats: null, topo: null, ctlOk: false, netOk: false, paused: false, sel: null, dirty: false,
             lastPulse: 0, map: null, actKey: "", trForm: {n: 300, c: 10},
-            phases: {off: [], on: [], offPolicy: null, onPolicy: null, lastT: 0}, demo: null };
+            phases: {off: [], on: [], offPolicy: null, onPolicy: null, lastT: 0}, demo: null,
+            stopPending: false, stopAccepted: false, vmShutdown: "" };
   var $ = function (id) { return document.getElementById(id); };
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -560,6 +568,49 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
   $("theme").onclick = function () { setTheme(isDark() ? "light" : "dark"); render(); };
   $("pause").onclick = function () { S.paused = !S.paused; this.setAttribute("aria-pressed", S.paused); this.textContent = S.paused ? "Resume updates" : "Pause updates"; };
   $("map-fit").onclick = function () { this.setAttribute("aria-pressed", $("map-viewport").classList.toggle("fit")); };
+
+  function updateShutdownButtons() {
+    var button = $("stop-mininet");
+    button.hidden = !localDashboard;
+    button.disabled = !!S.vmShutdown || S.stopPending || !S.netOk || !S.topo.can_stop;
+    button.textContent = S.stopPending ? "Stopping Mininet…" : "Stop Mininet";
+    var vmButton = $("shutdown-vm");
+    vmButton.hidden = !localDashboard || !S.stats || !S.stats.can_shutdown_vm;
+    vmButton.disabled = !!S.vmShutdown || !S.ctlOk || S.stopPending;
+    vmButton.textContent = S.vmShutdown ? "Shutting down VM…" : "Shut down VM";
+  }
+  $("stop-mininet").onclick = function () {
+    if (!window.confirm("Stop Mininet and end all simulated traffic? The dashboard will stay open.")) return;
+    S.stopPending = true;
+    updateShutdownButtons();
+    post("/api/stop-mininet", {}).then(function () {
+      S.stopAccepted = true;
+      if (S.demo) demoEnd("Demo ended because Mininet is shutting down.");
+      toast("Mininet stopped.");
+      refresh();
+    }).catch(function (err) {
+      S.stopPending = false;
+      updateShutdownButtons();
+      toast(err.message, true);
+    });
+  };
+  $("shutdown-vm").onclick = function () {
+    if (!window.confirm("Shut down the entire lab VM? This ends Mininet and takes the dashboard offline.")) return;
+    S.vmShutdown = "pending";
+    updateShutdownButtons();
+    post("/api/shutdown-vm", {}).then(function () {
+      S.vmShutdown = "scheduled";
+      clearInterval(refreshTimer);
+      if (S.demo) demoEnd("Demo ended because the VM is shutting down.");
+      $("dashboard-view").hidden = true;
+      $("shutdown-view").hidden = false;
+      $("shutdown-title").focus();
+    }).catch(function (err) {
+      S.vmShutdown = "";
+      updateShutdownButtons();
+      toast(err.message, true);
+    });
+  };
 
   // ---------------- lookups across the two data sources ----------------
   function nodeByName(n) { return S.topo ? S.topo.nodes.filter(function (x) { return x.name === n; })[0] : null; }
@@ -1344,18 +1395,30 @@ footer { margin-top: 32px; color: var(--muted); font-size: var(--text-small); }
     renderServers(); renderSwitches(); renderRecent(); renderEvents(); renderTraffic(); renderPhases(); fillSettings(false);
   }
   function refresh() {
+    if (S.vmShutdown === "scheduled") return Promise.resolve();
     var a = fetch("/stats", {cache: "no-store"}).then(function (r) { return r.json(); });
-    var b = fetch(NET_API + "/api/topology", {cache: "no-store"}).then(function (r) { return r.json(); });
+    var b = fetch(NET_API + "/api/topology", {cache: "no-store"}).then(function (r) {
+      if (!r.ok) throw new Error("Network control is offline");
+      return r.json();
+    });
     return Promise.allSettled([a, b]).then(function (res) {
+      if (S.vmShutdown === "scheduled") return;
       S.ctlOk = res[0].status === "fulfilled";
       if (S.ctlOk) { S.stats = res[0].value; collectPhases(); }
       S.netOk = res[1].status === "fulfilled";
       if (S.netOk) S.topo = res[1].value;
-      if (!S.paused) render();
+      var stopped = S.stopAccepted && !S.netOk;
+      if (stopped) {
+        S.stopPending = S.stopAccepted = false;
+        S.sel = null;
+        S.actKey = "";
+      }
+      updateShutdownButtons();
+      if (!S.paused || stopped) render();
     });
   }
   window.addEventListener("resize", function () { if (!S.paused) renderChart(); });
-  setInterval(refresh, 1000); refresh();
+  var refreshTimer = setInterval(refresh, 1000); refresh();
 })();
 </script>
 </body>
